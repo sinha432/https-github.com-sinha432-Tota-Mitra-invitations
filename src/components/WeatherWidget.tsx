@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import Weather3DEffects from './Weather3DEffects';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
@@ -343,6 +344,8 @@ const WeatherWidget: React.FC = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* 3D Weather Effects */}
+        <Weather3DEffects condition={weather.condition === 'partly-cloudy' ? 'cloudy' : weather.condition} />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="flex items-center gap-2">
             <Thermometer className="h-4 w-4 text-red-500" />

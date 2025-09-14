@@ -39,8 +39,12 @@ import { mockWorkers, mockTasks, mockFeedback, Feedback } from '@/data/mockData'
 import FeedbackForm from '@/components/FeedbackForm'
 import WeatherWidget from '@/components/WeatherWidget'
 import ThreeDIcon from '../components/ThreeDIcon';
+import AttendanceBoard3D from '../components/AttendanceBoard3D';
+import GroupClusters3D from '../components/GroupClusters3D';
+import TaskTimeline3D from '../components/TaskTimeline3D';
 import '../components/WorkerProfile3D.css';
 import { toast } from 'sonner'
+import Notification3D from '../components/Notification3D';
 
 type Task = {
   id: string;
@@ -94,6 +98,7 @@ const WorkerDashboard = () => {
   const [showFeedbackForm, setShowFeedbackForm] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [showRequestTask, setShowRequestTask] = useState(false)
+  const [notification, setNotification] = useState<{ message: string, color?: string } | null>(null);
   const [newTask, setNewTask] = useState({
     title: '',
     type: '',
@@ -143,6 +148,8 @@ const WorkerDashboard = () => {
       createdAt: new Date().toISOString()
     }
     setWorkerTasksState([...workerTasksState, taskData])
+    setNotification({ message: language === 'en' ? 'Task request submitted!' : 'ಕಾರ್ಯ ವಿನಂತಿಯನ್ನು ಸಲ್ಲಿಸಲಾಗಿದೆ!', color: '#00e6d3' });
+    setTimeout(() => setNotification(null), 2000);
     toast.success(language === 'en' ? 'Task request submitted!' : 'ಕಾರ್ಯ ವಿನಂತಿಯನ್ನು ಸಲ್ಲಿಸಲಾಗಿದೆ!')
     setShowRequestTask(false)
     setNewTask({
@@ -293,6 +300,9 @@ const WorkerDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {notification && (
+        <Notification3D message={notification.message} color={notification.color} duration={2000} onClose={() => setNotification(null)} />
+      )}
       <div className="flex justify-end p-2">
         <Button variant="outline" size="sm" onClick={toggleTheme}>
           {theme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode'}
@@ -347,6 +357,7 @@ const WorkerDashboard = () => {
 
           {/* My Tasks Tab */}
           <TabsContent value="tasks" className="space-y-6">
+            {/* ...existing code... */}
             {/* Stats Cards, Attendance, and Request Task Button */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card>
@@ -399,7 +410,7 @@ const WorkerDashboard = () => {
                 <CardContent>
                   <div className="text-2xl font-bold">{workerTasksState.length}</div>
                   <Button className="mt-4 w-full" onClick={() => setShowRequestTask(true)}>
-                    <ThreeDIcon icon="plus" />
+                    {/* Removed 3D icon */}
                     {language === 'en' ? 'Request New Task' : 'ಹೊಸ ಕಾರ್ಯ ವಿನಂತಿಸಿ'}
                   </Button>
                 </CardContent>
@@ -498,7 +509,6 @@ const WorkerDashboard = () => {
 
             {/* Weather Widget */}
             <div className="flex items-center gap-2 mb-2">
-              <ThreeDIcon icon="weather" />
               <span className="font-semibold">Weather</span>
             </div>
             <WeatherWidget />
@@ -664,11 +674,9 @@ const WorkerDashboard = () => {
                 </CardHeader>
                 <CardContent className={`space-y-4 ${animateProfile ? 'worker-profile-3d-animate' : ''}`}> 
                   <div className="flex items-center justify-center mb-6">
-                    <Avatar className="h-24 w-24">
+                    <Avatar className="h-20 w-20">
                       <AvatarImage src={currentWorker.profilePic} alt={currentWorker.name} />
-                      <AvatarFallback className="text-2xl">
-                        {currentWorker.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
+                      <AvatarFallback>{currentWorker.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
                     </Avatar>
                   </div>
 
@@ -752,11 +760,9 @@ const WorkerDashboard = () => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {currentWorker.skills.map((skill) => (
-                        <Badge key={skill} variant="outline" className="px-3 py-1">
-                          {skill}
-                        </Badge>
+                    <div className="flex gap-2 flex-wrap">
+                      {currentWorker.skills.map(skill => (
+                        <Badge key={skill} variant="secondary">{skill}</Badge>
                       ))}
                     </div>
                   </CardContent>
