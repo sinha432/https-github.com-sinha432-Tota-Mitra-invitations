@@ -1,0 +1,7 @@
+
+.progress-bar {
+  height: 12px;
+  border-radius: 9999px;
+  transition: width 0.5s;
+  /* width will be set inline via style prop */
+}

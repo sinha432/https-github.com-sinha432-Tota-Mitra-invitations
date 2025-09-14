@@ -1,0 +1,88 @@
+/* 3D Switch Animation for Worker Profile */
+@keyframes switch3D {
+  0% {
+    transform: perspective(800px) rotateY(0deg) scale(1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+    opacity: 1;
+  }
+  30% {
+    transform: perspective(800px) rotateY(90deg) scale(1.08);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+    opacity: 0.5;
+  }
+  50% {
+    transform: perspective(800px) rotateY(180deg) scale(0.96);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+    opacity: 0.3;
+  }
+  70% {
+    transform: perspective(800px) rotateY(270deg) scale(1.04);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    opacity: 0.5;
+  }
+  100% {
+    transform: perspective(800px) rotateY(360deg) scale(1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+    opacity: 1;
+  }
+}
+
+@keyframes pop3D {
+  0% {
+    transform: scale(1) perspective(800px) rotateY(0deg);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+  }
+  20% {
+    transform: scale(1.12) perspective(800px) rotateY(10deg);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  }
+  40% {
+    transform: scale(0.96) perspective(800px) rotateY(20deg);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  }
+  60% {
+    transform: scale(1.08) perspective(800px) rotateY(10deg);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  }
+  100% {
+    transform: scale(1) perspective(800px) rotateY(0deg);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+  }
+}
+
+.worker-profile-3d-animate {
+  animation: switch3D 0.8s cubic-bezier(0.4, 0.2, 0.2, 1), pop3D 0.5s cubic-bezier(0.4, 0.2, 0.2, 1);
+  will-change: transform, box-shadow, opacity;
+  backface-visibility: hidden;
+  perspective: 800px;
+}
+
+.worker-profile-switch-ui {
+  background: linear-gradient(90deg, #f8fafc 0%, #e0e7ef 100%);
+  border-radius: 18px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.10);
+  padding: 1.5rem 1rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  transition: box-shadow 0.3s, background 0.3s;
+}
+.worker-profile-switch-ui .profile-switch-label {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #222;
+  margin-bottom: 0.5rem;
+}
+.worker-profile-switch-ui .profile-switch-select {
+  width: 100%;
+  max-width: 340px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  font-size: 1rem;
+  padding: 0.5rem 1rem;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  transition: border 0.2s;
+}

@@ -1,0 +1,12 @@
+.three-d-orb-container {
+  width: 80px;
+  height: 80px;
+  cursor: pointer;
+  position: relative;
+  z-index: 1200;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+.three-d-orb-container:hover {
+  box-shadow: 0 8px 32px rgba(79,140,255,0.22), 0 2px 8px rgba(0,230,211,0.12);
+  transform: scale(1.08) rotate(-6deg);
+}

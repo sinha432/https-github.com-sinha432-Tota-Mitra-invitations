@@ -1,0 +1,6 @@
+- [ ] Consolidate all imports at the top of the file
+- [ ] Remove duplicate component definition
+- [ ] Fix JSX syntax errors (remove misplaced text like ",taskTitle: 'Task Title'")
+- [ ] Remove duplicate translation keys in translations object
+- [ ] Ensure proper structure and closing tags
+- [ ] Verify the file compiles without errors

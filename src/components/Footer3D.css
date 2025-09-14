@@ -1,0 +1,33 @@
+/* 3D Footer Styles */
+/* Compact 3D Footer Styles */
+.footer-3d {
+  color: #000;
+  background: linear-gradient(135deg, #e0e0e0 0%, #ffffff 100%);
+  box-shadow: 0 4px 24px 0 rgba(0,0,0,0.12), 0 1.5px 6px 0 rgba(0,0,0,0.10);
+  border-radius: 32px 32px 32px 32px;
+  border: 2px solid #bdbdbd;
+  margin: 0 auto;
+  max-width: 420px;
+  left: 0;
+  right: 0;
+  position: fixed;
+  bottom: 24px;
+  z-index: 50;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  font-size: 0.95rem;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: box-shadow 0.3s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+.footer-3d p {
+  margin: 0.1rem 0;
+  text-shadow: 1px 1px 2px #bdbdbd;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
