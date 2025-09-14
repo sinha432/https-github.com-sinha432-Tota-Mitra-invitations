@@ -31,16 +31,9 @@ interface WeatherData {
 
 const WeatherWidget: React.FC = () => {
   const { language } = useAuth()
-  const [weather, setWeather] = useState<WeatherData>({
-    temperature: 28,
-    humidity: 65,
-    windSpeed: 12,
-    condition: 'partly-cloudy',
-    visibility: 10,
-    location: 'Mangalore, Karnataka'
-  })
+  const [weather, setWeather] = useState<WeatherData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [lastUpdated, setLastUpdated] = useState(new Date())
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const userSkills = ['Harvesting', 'Medicine Spray', 'General Farm Labor', 'Pepper Vine Support'];
   const userGroup = 'Group 1';
   const [history, setHistory] = useState<Array<{ date: string, condition: string, suggestion: string }>>([]);
@@ -49,12 +42,19 @@ const WeatherWidget: React.FC = () => {
     { name: 'Ravi', skills: ['Harvesting', 'General Farm Labor'], group: 'Group 1' },
     { name: 'Meena', skills: ['Pepper Vine Support', 'Banana Cultivation'], group: 'Group 2' }
   ];
-  const isSevere = weather.condition === 'stormy' || weather.condition === 'rainy';
+  const isSevere = weather ? (weather.condition === 'stormy' || weather.condition === 'rainy') : false;
   const isMounted = React.useRef(true);
   useEffect(() => {
     isMounted.current = true;
+    // On mount, get location and fetch weather
+    getCurrentLocationAndWeather();
+    // Set up periodic refresh every 10 minutes
+    const interval = setInterval(() => {
+      getCurrentLocationAndWeather();
+    }, 600000);
     return () => {
       isMounted.current = false;
+      clearInterval(interval);
     };
   }, []);
   const askAIForAdvice = () => {
@@ -112,77 +112,86 @@ const WeatherWidget: React.FC = () => {
 
   const t = translations[language]
 
-  const getCurrentLocation = () => {
-    console.log('📍 Getting current location...')
-    setIsLoading(true)
+  // Get location and fetch weather from OpenWeatherMap
+  const getCurrentLocationAndWeather = () => {
+    setIsLoading(true);
     if (!navigator.geolocation) {
-      toast.error(language === 'en' ? 'Geolocation not supported' : 'ಜಿಯೋಲೊಕೇಶನ್ ಬೆಂಬಲಿತವಾಗಿಲ್ಲ')
-      setIsLoading(false)
-      return
+      toast.error(language === 'en' ? 'Geolocation not supported' : 'ಜಿಯೋಲೊಕೇಶನ್ ಬೆಂಬಲಿತವಾಗಿಲ್ಲ');
+      setIsLoading(false);
+      return;
     }
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         if (!isMounted.current) return;
-        console.log('✅ Location obtained:', position.coords)
-        const { latitude, longitude } = position.coords
-        const mockLocation = `${latitude.toFixed(2)}°N, ${longitude.toFixed(2)}°E`
-        const mockWeatherData: WeatherData = {
-          temperature: Math.round(25 + Math.random() * 10),
-          humidity: Math.round(50 + Math.random() * 40),
-          windSpeed: Math.round(5 + Math.random() * 15),
-          condition: ['sunny', 'partly-cloudy', 'cloudy'][Math.floor(Math.random() * 3)],
-          visibility: Math.round(8 + Math.random() * 4),
-          location: mockLocation,
-          coordinates: { lat: latitude, lon: longitude }
+        const { latitude, longitude } = position.coords;
+        const locationStr = `${latitude.toFixed(2)}°N, ${longitude.toFixed(2)}°E`;
+        // Fetch weather from OpenWeatherMap
+        const apiKey = import.meta.env.VITE_OPENWEATHERMAP_API_KEY;
+        if (!apiKey) {
+          toast.error(language === 'en' ? 'API key missing. Please set VITE_OPENWEATHERMAP_API_KEY in .env and restart.' : 'API ಕೀ ಕಾಣುತ್ತಿಲ್ಲ. ದಯವಿಟ್ಟು .env ನಲ್ಲಿ ಸೆಟ್ ಮಾಡಿ ಮತ್ತು ಪುನರಾರಂಭಿಸಿ.');
+          setIsLoading(false);
+          return;
         }
-        setWeather(mockWeatherData)
-        setLastUpdated(new Date())
-        toast.success(t.weatherUpdated)
-        setIsLoading(false)
+        try {
+          const url = `https://api.openweathermap.org/data/2.5/weather?q=Patna&appid=${apiKey}&units=metric`;
+          const res = await fetch(url);
+          if (!res.ok) {
+            toast.error(language === 'en' ? `Weather API error: ${res.status}` : `ಹವಾಮಾನ API ದೋಷ: ${res.status}`);
+            setIsLoading(false);
+            return;
+          }
+          const data = await res.json();
+          if (!data.main || !data.weather || !Array.isArray(data.weather)) {
+            toast.error(language === 'en' ? 'Unexpected weather API response.' : 'ಹವಾಮಾನ API ಪ್ರತಿಕ್ರಿಯೆ ಅನಿರೀಕ್ಷಿತವಾಗಿದೆ.');
+            setIsLoading(false);
+            return;
+          }
+          const weatherData: WeatherData = {
+            temperature: Math.round(data.main.temp),
+            humidity: Math.round(data.main.humidity),
+            windSpeed: Math.round(data.wind.speed),
+            condition: data.weather[0].main ? data.weather[0].main.toLowerCase() : 'unknown',
+            visibility: Math.round((data.visibility || 10000) / 1000),
+            location: `${latitude.toFixed(2)}°N, ${longitude.toFixed(2)}°E / Puttur`,
+            coordinates: { lat: latitude, lon: longitude }
+          };
+          setWeather(weatherData);
+          setLastUpdated(new Date());
+          toast.success(t.weatherUpdated);
+        } catch (err) {
+          toast.error(language === 'en' ? 'Failed to fetch weather (network or CORS error)' : 'ಹವಾಮಾನ ಪಡೆಯಲು ವಿಫಲವಾಗಿದೆ (ನೆಟ್ವರ್ಕ್ ಅಥವಾ CORS ದೋಷ)');
+        }
+        setIsLoading(false);
       },
       (error) => {
         if (!isMounted.current) return;
-        console.error('❌ Error getting location:', error)
-        let errorMessage = t.locationError
+        let errorMessage = t.locationError;
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage = t.locationDenied
-            break
+            errorMessage = t.locationDenied;
+            break;
           case error.POSITION_UNAVAILABLE:
-            errorMessage = language === 'en' ? 'Location unavailable' : 'ಸ್ಥಳ ಲಭ್ಯವಿಲ್ಲ'
-            break
+            errorMessage = language === 'en' ? 'Location unavailable' : 'ಸ್ಥಳ ಲಭ್ಯವಿಲ್ಲ';
+            break;
           case error.TIMEOUT:
-            errorMessage = language === 'en' ? 'Location request timeout' : 'ಸ್ಥಳ ವಿನಂತಿ ಸಮಯ ಮೀರಿದೆ'
-            break
+            errorMessage = language === 'en' ? 'Location request timeout' : 'ಸ್ಥಳ ವಿನಂತಿ ಸಮಯ ಮೀರಿದೆ';
+            break;
         }
-        toast.error(errorMessage)
-        setIsLoading(false)
+        toast.error(errorMessage);
+        setIsLoading(false);
       },
       {
         enableHighAccuracy: true,
         timeout: 10000,
         maximumAge: 60000
       }
-    )
-  }
+    );
+  };
 
+  // Manual refresh
   const refreshWeather = () => {
-    console.log('🔄 Refreshing weather data...')
-    setIsLoading(true)
-    // Simulate API call
-    setTimeout(() => {
-      if (!isMounted.current) return;
-      setWeather(prev => ({
-        ...prev,
-        temperature: Math.round(25 + Math.random() * 10),
-        humidity: Math.round(50 + Math.random() * 40),
-        windSpeed: Math.round(5 + Math.random() * 15)
-      }))
-      setLastUpdated(new Date())
-      toast.success(t.weatherUpdated)
-      setIsLoading(false)
-    }, 1000)
-  }
+    getCurrentLocationAndWeather();
+  };
 
   const getWeatherIcon = (condition: string) => {
     switch (condition) {
@@ -255,6 +264,7 @@ const WeatherWidget: React.FC = () => {
 
   // Move history update to useEffect
   useEffect(() => {
+    if (!weather) return;
     let baseSuggestion = '';
     switch (weather.condition) {
       case 'sunny':
@@ -289,7 +299,7 @@ const WeatherWidget: React.FC = () => {
     }
     if (!isMounted.current) return;
     setHistory(h => [...h, { date: new Date().toLocaleDateString(), condition: weather.condition, suggestion: baseSuggestion }]);
-  }, [weather.condition, language]);
+  }, [weather, language]);
 
   // Helper for supervisor suggestions
   const getTaskSuggestionForWorker = (worker: { name: string, skills: string[], group: string }) => {
@@ -304,22 +314,10 @@ const WeatherWidget: React.FC = () => {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {getWeatherIcon(weather.condition)}
+            {weather ? getWeatherIcon(weather.condition) : <Loader2 className="h-5 w-5 animate-spin" />}
             <CardTitle className="text-lg">{t.weather}</CardTitle>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={getCurrentLocation}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <MapPin className="h-3 w-3" />
-              )}
-            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -340,12 +338,13 @@ const WeatherWidget: React.FC = () => {
         </div>
         <CardDescription className="flex items-center gap-1">
           <MapPin className="h-3 w-3" />
-          {weather.location}
+          {weather ? weather.location : (language === 'en' ? 'Loading...' : 'ಲೋಡ್ ಆಗುತ್ತಿದೆ...')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* 3D Weather Effects */}
-        <Weather3DEffects condition={weather.condition === 'partly-cloudy' ? 'cloudy' : weather.condition} />
+        {weather && <Weather3DEffects condition={weather.condition === 'partly-cloudy' ? 'cloudy' : weather.condition} />}
+        {weather ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="flex items-center gap-2">
             <Thermometer className="h-4 w-4 text-red-500" />
@@ -354,7 +353,6 @@ const WeatherWidget: React.FC = () => {
               <p className="font-medium">{weather.temperature}°C</p>
             </div>
           </div>
-          
           <div className="flex items-center gap-2">
             <Droplets className="h-4 w-4 text-blue-500" />
             <div>
@@ -362,7 +360,6 @@ const WeatherWidget: React.FC = () => {
               <p className="font-medium">{weather.humidity}%</p>
             </div>
           </div>
-          
           <div className="flex items-center gap-2">
             <Wind className="h-4 w-4 text-gray-500" />
             <div>
@@ -370,7 +367,6 @@ const WeatherWidget: React.FC = () => {
               <p className="font-medium">{weather.windSpeed} km/h</p>
             </div>
           </div>
-          
           <div className="flex items-center gap-2">
             <Eye className="h-4 w-4 text-purple-500" />
             <div>
@@ -379,8 +375,15 @@ const WeatherWidget: React.FC = () => {
             </div>
           </div>
         </div>
+        ) : (
+          <div className="flex justify-center items-center h-24">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span className="ml-2">{language === 'en' ? 'Loading weather...' : 'ಹವಾಮಾನ ಲೋಡ್ ಆಗುತ್ತಿದೆ...'}</span>
+          </div>
+        )}
         {/* Real-time task suggestion with customizations */}
-        <div className={`mt-2 p-3 rounded border ${isSevere ? 'bg-red-50 text-red-900 border-red-200' : 'bg-blue-50 text-blue-900 border-blue-200'}`}>
+        {weather ? (
+        <div className={`mt-2 p-3 rounded border ${weather.condition === 'stormy' || weather.condition === 'rainy' ? 'bg-red-50 text-red-900 border-red-200' : 'bg-blue-50 text-blue-900 border-blue-200'}`}>
           <strong>{language === 'en' ? 'Suggested Tasks:' : 'ಶಿಫಾರಸು ಮಾಡಿದ ಕಾರ್ಯಗಳು:'}</strong>
           <div className="mt-1 text-sm">{getTaskSuggestion()}</div>
           {/* Action buttons for quick scheduling/request */}
@@ -393,7 +396,7 @@ const WeatherWidget: React.FC = () => {
             </Button>
           </div>
           {/* Severity alert */}
-          {isSevere && (
+          {(weather.condition === 'stormy' || weather.condition === 'rainy') && (
             <div className="mt-2 text-xs font-bold text-red-700">
               {language === 'en' ? 'Severe weather! Please ensure safety and avoid risky tasks.' : 'ತೀವ್ರ ಹವಾಮಾನ! ದಯವಿಟ್ಟು ಸುರಕ್ಷತೆ ಖಚಿತಪಡಿಸಿ ಮತ್ತು ಅಪಾಯದ ಕೆಲಸಗಳನ್ನು ತಪ್ಪಿಸಿ.'}
             </div>
@@ -409,15 +412,16 @@ const WeatherWidget: React.FC = () => {
             <strong>{language === 'en' ? 'History:' : 'ಇತಿಹಾಸ:'}</strong> {history.slice(-3).map(h => `${h.date}: ${h.condition} - ${h.suggestion}`).join(' | ')}
           </div>
         </div>
+        ) : null}
         <div className="flex items-center justify-between pt-2 border-t">
           <div className="flex items-center gap-2">
-            {getWeatherIcon(weather.condition)}
+            {weather ? getWeatherIcon(weather.condition) : <Loader2 className="h-4 w-4 animate-spin" />}
             <span className="text-sm font-medium">
-              {t.conditions[weather.condition as keyof typeof t.conditions] || weather.condition}
+              {weather ? (t.conditions[weather.condition as keyof typeof t.conditions] || weather.condition) : (language === 'en' ? 'Loading...' : 'ಲೋಡ್ ಆಗುತ್ತಿದೆ...')}
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
-            {t.lastUpdated}: {formatTime(lastUpdated)}
+            {t.lastUpdated}: {lastUpdated ? formatTime(lastUpdated) : (language === 'en' ? 'Loading...' : 'ಲೋಡ್ ಆಗುತ್ತಿದೆ...')}
           </p>
         </div>
       </CardContent>
