@@ -58,7 +58,7 @@
 }
 
 .worker-profile-switch-ui {
-  background: linear-gradient(90deg, #f8fafc 0%, #e0e7ef 100%);
+  background: linear-gradient(90deg, hsl(var(--card)) 0%, hsl(var(--muted)) 100%);
   border-radius: 18px;
   box-shadow: 0 2px 16px rgba(0,0,0,0.10);
   padding: 1.5rem 1rem;
@@ -68,21 +68,63 @@
   align-items: center;
   gap: 0.5rem;
   transition: box-shadow 0.3s, background 0.3s;
+  border: 1px solid hsl(var(--border));
 }
+
+.worker-profile-switch-ui:hover {
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+
 .worker-profile-switch-ui .profile-switch-label {
   font-size: 1.1rem;
   font-weight: 600;
-  color: #222;
+  color: hsl(var(--foreground));
   margin-bottom: 0.5rem;
 }
+
 .worker-profile-switch-ui .profile-switch-select {
   width: 100%;
   max-width: 340px;
   border-radius: 12px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid hsl(var(--input));
   font-size: 1rem;
   padding: 0.5rem 1rem;
-  background: #fff;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
   box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-  transition: border 0.2s;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+
+.worker-profile-switch-ui .profile-switch-select:hover {
+  border-color: hsl(var(--ring));
+}
+
+.worker-profile-switch-ui .profile-switch-select:focus {
+  outline: none;
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+/* Dark mode specific enhancements */
+.dark .worker-profile-switch-ui {
+  background: linear-gradient(90deg, hsl(var(--card)) 0%, hsl(var(--accent)) 100%);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.20);
+}
+
+.dark .worker-profile-switch-ui:hover {
+  box-shadow: 0 4px 24px rgba(0,0,0,0.30);
+}
+
+.dark .worker-profile-switch-ui .profile-switch-select {
+  background: hsl(var(--popover));
+  border-color: hsl(var(--border));
+}
+
+.dark .worker-profile-switch-ui .profile-switch-select:hover {
+  border-color: hsl(var(--ring));
+}
+
+.dark .worker-profile-switch-ui .profile-switch-select:focus {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.3);
 }

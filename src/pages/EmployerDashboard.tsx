@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Plus,
   Calendar as CalendarIcon,
@@ -60,6 +61,9 @@ const EmployerDashboard = () => {
     duration: '',
     description: ''
   })
+
+  // Worker selection state
+  const [selectedWorkers, setSelectedWorkers] = useState<string[]>([])
 
   // Theme toggle
   const [theme, setTheme] = useState(document.documentElement.classList.contains('dark') ? 'dark' : 'light');
@@ -169,11 +173,58 @@ const EmployerDashboard = () => {
 
   const availableWorkers = mockWorkers.filter(w => w.availability)
 
+  // Helper function to get workers available for a specific task type
+  const getWorkersForTaskType = (taskType: string) => {
+    return availableWorkers.filter(worker =>
+      worker.skills.some(skill => skill.toLowerCase().includes(taskType.toLowerCase().split(' ')[0]))
+    )
+  }
+
+  // Helper function to handle worker selection
+  const handleWorkerSelection = (workerId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedWorkers(prev => [...prev, workerId])
+    } else {
+      setSelectedWorkers(prev => prev.filter(id => id !== workerId))
+    }
+  }
+
+  // Helper function to reset form
+  const resetForm = () => {
+    setShowCreateTask(false)
+    setNewTask({
+      title: '',
+      type: '',
+      date: '',
+      workersNeeded: 1,
+      location: '',
+      duration: '',
+      description: ''
+    })
+    setSelectedWorkers([])
+    setSelectedDate(undefined)
+  }
+
   const handleCreateTask = () => {
     console.log('📝 Creating new task:', newTask)
-    
+
     if (!newTask.title || !newTask.type || !newTask.date || !newTask.location) {
       toast.error(t.fillRequired)
+      return
+    }
+
+    // Validate worker selection
+    if (selectedWorkers.length === 0) {
+      toast.error(language === 'en' ? 'Please select at least one worker' : 'ದಯವಿಟ್ಟು ಕನಿಷ್ಠ ಒಂದು ಕೆಲಸಗಾರನನ್ನು ಆಯ್ಕೆಮಾಡಿ')
+      return
+    }
+
+    if (selectedWorkers.length !== newTask.workersNeeded) {
+      toast.error(
+        language === 'en'
+          ? `Please select exactly ${newTask.workersNeeded} worker(s). Currently selected: ${selectedWorkers.length}`
+          : `ದಯವಿಟ್ಟು ನಿಖರವಾಗಿ ${newTask.workersNeeded} ಕೆಲಸಗಾರರನ್ನು ಆಯ್ಕೆಮಾಡಿ. ಪ್ರಸ್ತುತ ಆಯ್ಕೆಯಾಗಿರುವುದು: ${selectedWorkers.length}`
+      )
       return
     }
 
@@ -184,7 +235,7 @@ const EmployerDashboard = () => {
       type: newTask.type as TaskType,
       date: newTask.date,
       workersNeeded: newTask.workersNeeded,
-      assignedWorkers: [],
+      assignedWorkers: selectedWorkers,
       status: 'pending' as const,
       location: newTask.location,
       duration: newTask.duration,
@@ -197,17 +248,7 @@ const EmployerDashboard = () => {
     setTasks((prevTasks) => [...prevTasks, taskData])
     toast.success(t.taskCreated)
     setTaskCreatedMessage(t.taskCreated)
-    setShowCreateTask(false)
-    setNewTask({
-      title: '',
-      type: '',
-      date: '',
-      workersNeeded: 1,
-      location: '',
-      duration: '',
-      description: ''
-    })
-    setSelectedDate(undefined)
+    resetForm()
   }
 
   const getStatusColor = (status: string) => {
@@ -500,7 +541,10 @@ const EmployerDashboard = () => {
 
                     <div className="space-y-2">
                       <Label htmlFor="type">{t.taskType}</Label>
-                      <Select value={newTask.type} onValueChange={(value) => setNewTask({ ...newTask, type: value })}>
+                      <Select value={newTask.type} onValueChange={(value) => {
+                        setNewTask({ ...newTask, type: value })
+                        setSelectedWorkers([]) // Reset selected workers when task type changes
+                      }}>
                         <SelectTrigger>
                           <SelectValue placeholder={language === 'en' ? 'Select task type' : 'ಕಾರ್ಯದ ಪ್ರಕಾರ ಆಯ್ಕೆಮಾಡಿ'} />
                         </SelectTrigger>
@@ -578,12 +622,89 @@ const EmployerDashboard = () => {
                     />
                   </div>
 
+                  {/* Worker Selection Section */}
+                  {newTask.type && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-base font-semibold">{t.selectWorkers}</Label>
+                        <div className="text-sm text-muted-foreground">
+                          {language === 'en'
+                            ? `Selected: ${selectedWorkers.length}/${newTask.workersNeeded}`
+                            : `ಆಯ್ಕೆಯಾಗಿರುವುದು: ${selectedWorkers.length}/${newTask.workersNeeded}`
+                          }
+                        </div>
+                      </div>
+
+                      <div className="border rounded-lg p-4 max-h-60 overflow-y-auto">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {getWorkersForTaskType(newTask.type).map((worker) => (
+                            <div key={worker.id} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-muted/50">
+                              <Checkbox
+                                id={`worker-${worker.id}`}
+                                checked={selectedWorkers.includes(worker.id)}
+                                onCheckedChange={(checked) => handleWorkerSelection(worker.id, checked as boolean)}
+                                disabled={selectedWorkers.length >= newTask.workersNeeded && !selectedWorkers.includes(worker.id)}
+                              />
+                              <div className="flex items-center space-x-3 flex-1">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={worker.profilePic} alt={worker.name} />
+                                  <AvatarFallback className="text-xs">
+                                    {worker.name.split(' ').map(n => n[0]).join('')}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-medium truncate">{worker.name}</p>
+                                    <div className={`w-2 h-2 rounded-full ${worker.availability ? 'bg-green-500' : 'bg-red-500'}`} />
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <MapPin className="h-3 w-3" />
+                                    <span className="truncate">{worker.location}</span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-yellow-400 text-xs">★</span>
+                                  <span className="text-xs">{worker.rating}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {getWorkersForTaskType(newTask.type).length === 0 && (
+                          <div className="text-center py-8 text-muted-foreground">
+                            {language === 'en'
+                              ? 'No available workers found for this task type'
+                              : 'ಈ ಕಾರ್ಯದ ಪ್ರಕಾರಕ್ಕೆ ಯಾವುದೇ ಲಭ್ಯವಿರುವ ಕೆಲಸಗಾರರು ಕಂಡುಬಂದಿಲ್ಲ'
+                            }
+                          </div>
+                        )}
+                      </div>
+
+                      {selectedWorkers.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          <span className="text-sm font-medium">
+                            {language === 'en' ? 'Selected workers:' : 'ಆಯ್ಕೆಯಾದ ಕೆಲಸಗಾರರು:'}
+                          </span>
+                          {selectedWorkers.map(workerId => {
+                            const worker = mockWorkers.find(w => w.id === workerId)
+                            return worker ? (
+                              <Badge key={worker.id} variant="secondary" className="text-xs">
+                                {worker.name}
+                              </Badge>
+                            ) : null
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex gap-2 pt-4">
                     <Button onClick={handleCreateTask} className="flex-1">
                       <CheckCircle className="h-4 w-4 mr-2" />
                       {t.submitTask}
                     </Button>
-                    <Button variant="outline" onClick={() => setShowCreateTask(false)}>
+                    <Button variant="outline" onClick={resetForm}>
                       {t.cancel}
                     </Button>
                   </div>
