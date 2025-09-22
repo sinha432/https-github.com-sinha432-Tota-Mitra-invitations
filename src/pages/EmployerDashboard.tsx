@@ -17,7 +17,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Plus,
   Calendar as CalendarIcon,
@@ -41,15 +40,24 @@ import { format } from 'date-fns'
 
 const EmployerDashboard = () => {
   // Import AI Assistant
-  const AIAssistant = React.lazy(() => import('../components/AIAssistant'));
+  const AIAssistant = React.lazy(() => import('../components/EnhancedAIAssistant'));
   console.log('👔 EmployerDashboard component rendering...')
   
-  const { user, logout, language, setLanguage } = useAuth()
+  const { user, logout, language, setLanguage, addEmployerFeedback } = useAuth()
   const [selectedDate, setSelectedDate] = useState<Date>()
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [tasks, setTasks] = useState(mockTasks)
   const [taskCreatedMessage, setTaskCreatedMessage] = useState('')
+
+  // Employer feedback form state
+  const [showEmployerFeedbackForm, setShowEmployerFeedbackForm] = useState(false)
+  const [employerFeedbackForm, setEmployerFeedbackForm] = useState({
+    subject: '',
+    comment: '',
+    category: '',
+    priority: 'Medium'
+  })
 
   // New task form state
   const [newTask, setNewTask] = useState({
@@ -61,9 +69,6 @@ const EmployerDashboard = () => {
     duration: '',
     description: ''
   })
-
-  // Worker selection state
-  const [selectedWorkers, setSelectedWorkers] = useState<string[]>([])
 
   // Theme toggle
   const [theme, setTheme] = useState(document.documentElement.classList.contains('dark') ? 'dark' : 'light');
@@ -173,58 +178,11 @@ const EmployerDashboard = () => {
 
   const availableWorkers = mockWorkers.filter(w => w.availability)
 
-  // Helper function to get workers available for a specific task type
-  const getWorkersForTaskType = (taskType: string) => {
-    return availableWorkers.filter(worker =>
-      worker.skills.some(skill => skill.toLowerCase().includes(taskType.toLowerCase().split(' ')[0]))
-    )
-  }
-
-  // Helper function to handle worker selection
-  const handleWorkerSelection = (workerId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedWorkers(prev => [...prev, workerId])
-    } else {
-      setSelectedWorkers(prev => prev.filter(id => id !== workerId))
-    }
-  }
-
-  // Helper function to reset form
-  const resetForm = () => {
-    setShowCreateTask(false)
-    setNewTask({
-      title: '',
-      type: '',
-      date: '',
-      workersNeeded: 1,
-      location: '',
-      duration: '',
-      description: ''
-    })
-    setSelectedWorkers([])
-    setSelectedDate(undefined)
-  }
-
   const handleCreateTask = () => {
     console.log('📝 Creating new task:', newTask)
 
     if (!newTask.title || !newTask.type || !newTask.date || !newTask.location) {
       toast.error(t.fillRequired)
-      return
-    }
-
-    // Validate worker selection
-    if (selectedWorkers.length === 0) {
-      toast.error(language === 'en' ? 'Please select at least one worker' : 'ದಯವಿಟ್ಟು ಕನಿಷ್ಠ ಒಂದು ಕೆಲಸಗಾರನನ್ನು ಆಯ್ಕೆಮಾಡಿ')
-      return
-    }
-
-    if (selectedWorkers.length !== newTask.workersNeeded) {
-      toast.error(
-        language === 'en'
-          ? `Please select exactly ${newTask.workersNeeded} worker(s). Currently selected: ${selectedWorkers.length}`
-          : `ದಯವಿಟ್ಟು ನಿಖರವಾಗಿ ${newTask.workersNeeded} ಕೆಲಸಗಾರರನ್ನು ಆಯ್ಕೆಮಾಡಿ. ಪ್ರಸ್ತುತ ಆಯ್ಕೆಯಾಗಿರುವುದು: ${selectedWorkers.length}`
-      )
       return
     }
 
@@ -235,7 +193,7 @@ const EmployerDashboard = () => {
       type: newTask.type as TaskType,
       date: newTask.date,
       workersNeeded: newTask.workersNeeded,
-      assignedWorkers: selectedWorkers,
+      assignedWorkers: [],
       status: 'pending' as const,
       location: newTask.location,
       duration: newTask.duration,
@@ -248,7 +206,40 @@ const EmployerDashboard = () => {
     setTasks((prevTasks) => [...prevTasks, taskData])
     toast.success(t.taskCreated)
     setTaskCreatedMessage(t.taskCreated)
-    resetForm()
+    setShowCreateTask(false)
+    setNewTask({
+      title: '',
+      type: '',
+      date: '',
+      workersNeeded: 1,
+      location: '',
+      duration: '',
+      description: ''
+    })
+    setSelectedDate(undefined)
+  }
+
+  const handleEmployerFeedbackSubmit = () => {
+    if (!employerFeedbackForm.subject || !employerFeedbackForm.comment || !employerFeedbackForm.category) {
+      toast.error(language === 'en' ? 'Please fill all required fields' : 'ದಯವಿಟ್ಟು ಎಲ್ಲಾ ಅಗತ್ಯ ಕ್ಷೇತ್ರಗಳನ್ನು ಭರ್ತಿ ಮಾಡಿ')
+      return
+    }
+
+    addEmployerFeedback({
+      subject: employerFeedbackForm.subject,
+      comment: employerFeedbackForm.comment,
+      category: employerFeedbackForm.category as any,
+      priority: employerFeedbackForm.priority as any,
+      employerName: user?.name || 'Employer'
+    })
+
+    setEmployerFeedbackForm({
+      subject: '',
+      comment: '',
+      category: '',
+      priority: 'Medium'
+    })
+    setShowEmployerFeedbackForm(false)
   }
 
   const getStatusColor = (status: string) => {
@@ -329,6 +320,120 @@ const EmployerDashboard = () => {
               </div>
             )}
 
+            {/* Create Task Form - Now in Tasks Tab */}
+            {showCreateTask && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t.createTask}</CardTitle>
+                  <CardDescription>
+                    {language === 'en' ? 'Schedule a new task for your farm workers' : 'ನಿಮ್ಮ ಫಾರ್ಮ್ ಕೆಲಸಗಾರರಿಗೆ ಹೊಸ ಕಾರ್ಯವನ್ನು ವೇಳಾಪಟ್ಟಿ ಮಾಡಿ'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="title">{t.taskTitle}</Label>
+                      <Input
+                        id="title"
+                        value={newTask.title}
+                        onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                        placeholder={language === 'en' ? 'Enter task title' : 'ಕಾರ್ಯದ ಶೀರ್ಷಿಕೆ ನಮೂದಿಸಿ'}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="type">{t.taskType}</Label>
+                      <Select value={newTask.type} onValueChange={(value) => setNewTask({ ...newTask, type: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder={language === 'en' ? 'Select task type' : 'ಕಾರ್ಯದ ಪ್ರಕಾರ ಆಯ್ಕೆಮಾಡಿ'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {taskTypes.map((type) => (
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>{t.selectDate}</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full justify-start text-left">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {selectedDate ? format(selectedDate, 'PPP') : language === 'en' ? 'Pick a date' : 'ದಿನಾಂಕ ಆಯ್ಕೆಮಾಡಿ'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={selectedDate}
+                            onSelect={(date) => {
+                              setSelectedDate(date)
+                              setNewTask({ ...newTask, date: date ? format(date, 'yyyy-MM-dd') : '' })
+                            }}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="workers">{t.workersNeeded}</Label>
+                      <Input
+                        id="workers"
+                        type="number"
+                        min="1"
+                        value={newTask.workersNeeded}
+                        onChange={(e) => setNewTask({ ...newTask, workersNeeded: parseInt(e.target.value) })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="location">{t.location}</Label>
+                      <Input
+                        id="location"
+                        value={newTask.location}
+                        onChange={(e) => setNewTask({ ...newTask, location: e.target.value })}
+                        placeholder={language === 'en' ? 'Enter location' : 'ಸ್ಥಳ ನಮೂದಿಸಿ'}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="duration">{t.duration}</Label>
+                      <Input
+                        id="duration"
+                        value={newTask.duration}
+                        onChange={(e) => setNewTask({ ...newTask, duration: e.target.value })}
+                        placeholder={language === 'en' ? 'e.g., 4 hours' : 'ಉದಾ., 4 ಗಂಟೆಗಳು'}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="description">{t.description}</Label>
+                    <Textarea
+                      id="description"
+                      value={newTask.description}
+                      onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                      placeholder={language === 'en' ? 'Enter task description' : 'ಕಾರ್ಯದ ವಿವರಣೆ ನಮೂದಿಸಿ'}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-4">
+                    <Button onClick={handleCreateTask} className="flex-1">
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      {t.submitTask}
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowCreateTask(false)}>
+                      {t.cancel}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Stats Cards and Live Attendance */}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <Card>
@@ -392,6 +497,32 @@ const EmployerDashboard = () => {
               <span className="font-semibold">{t.weather}</span>
             </div>
             <WeatherWidget />
+
+            {/* Recent Feedback Panel */}
+            <div className="flex items-center gap-2 mb-2">
+              <ThreeDIcon icon="feedback" />
+              <span className="font-semibold">{t.feedback}</span>
+              <span className="text-sm text-muted-foreground">
+                {language === 'en' ? '(Recent feedback from workers)' : '(ಕೆಲಸಗಾರರಿಂದ ಇತ್ತೀಚಿನ ಪ್ರತಿಕ್ರಿಯೆ)'}
+              </span>
+            </div>
+            <div className="mb-6">
+              <FeedbackDisplay feedback={allFeedback.slice(0, 3)} />
+              <div className="flex justify-center mt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    // Switch to feedback tab
+                    const feedbackTab = document.querySelector('[value="feedback"]') as HTMLElement
+                    feedbackTab?.click()
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  {language === 'en' ? 'View All Feedback' : 'ಎಲ್ಲಾ ಪ್ರತಿಕ್ರಿಯೆಗಳನ್ನು ವೀಕ್ಷಿಸಿ'}
+                </Button>
+              </div>
+            </div>
 
             {/* Tasks List */}
             <div className="space-y-4">
@@ -517,200 +648,270 @@ const EmployerDashboard = () => {
           <TabsContent value="schedule" className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold">{t.schedule}</h2>
+              <Button onClick={() => {
+                setShowCreateTask(true)
+                setTaskCreatedMessage('')
+              }} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ThreeDIcon icon="plus" />
+                {t.createTask}
+              </Button>
             </div>
 
-            {showCreateTask && (
-              <Card>
+            {/* Calendar View */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Calendar */}
+              <Card className="lg:col-span-2">
                 <CardHeader>
-                  <CardTitle>{t.createTask}</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <CalendarIcon className="h-5 w-5" />
+                    {language === 'en' ? 'Task Calendar' : 'ಕಾರ್ಯ ಕ್ಯಾಲೆಂಡರ್'}
+                  </CardTitle>
                   <CardDescription>
-                    {language === 'en' ? 'Schedule a new task for your farm workers' : 'ನಿಮ್ಮ ಫಾರ್ಮ್ ಕೆಲಸಗಾರರಿಗೆ ಹೊಸ ಕಾರ್ಯವನ್ನು ವೇಳಾಪಟ್ಟಿ ಮಾಡಿ'}
+                    {language === 'en'
+                      ? 'View and manage your scheduled tasks by date'
+                      : 'ದಿನಾಂಕದ ಪ್ರಕಾರ ನಿಮ್ಮ ವೇಳಾಪಟ್ಟಿ ಮಾಡಿದ ಕಾರ್ಯಗಳನ್ನು ವೀಕ್ಷಿಸಿ ಮತ್ತು ನಿರ್ವಹಿಸಿ'
+                    }
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="title">{t.taskTitle}</Label>
-                      <Input
-                        id="title"
-                        value={newTask.title}
-                        onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                        placeholder={language === 'en' ? 'Enter task title' : 'ಕಾರ್ಯದ ಶೀರ್ಷಿಕೆ ನಮೂದಿಸಿ'}
-                      />
-                    </div>
+                <CardContent>
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    className="rounded-md border"
+                    modifiers={{
+                      hasTasks: tasks.map(task => new Date(task.date))
+                    }}
+                    modifiersStyles={{
+                      hasTasks: {
+                        backgroundColor: '#e0f7fa',
+                        color: '#00796b',
+                        fontWeight: 'bold'
+                      }
+                    }}
+                  />
+                </CardContent>
+              </Card>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="type">{t.taskType}</Label>
-                      <Select value={newTask.type} onValueChange={(value) => {
-                        setNewTask({ ...newTask, type: value })
-                        setSelectedWorkers([]) // Reset selected workers when task type changes
-                      }}>
-                        <SelectTrigger>
-                          <SelectValue placeholder={language === 'en' ? 'Select task type' : 'ಕಾರ್ಯದ ಪ್ರಕಾರ ಆಯ್ಕೆಮಾಡಿ'} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {taskTypes.map((type) => (
-                            <SelectItem key={type} value={type}>{type}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>{t.selectDate}</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" className="w-full justify-start text-left">
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {selectedDate ? format(selectedDate, 'PPP') : language === 'en' ? 'Pick a date' : 'ದಿನಾಂಕ ಆಯ್ಕೆಮಾಡಿ'}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={selectedDate}
-                            onSelect={(date) => {
-                              setSelectedDate(date)
-                              setNewTask({ ...newTask, date: date ? format(date, 'yyyy-MM-dd') : '' })
-                            }}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="workers">{t.workersNeeded}</Label>
-                      <Input
-                        id="workers"
-                        type="number"
-                        min="1"
-                        value={newTask.workersNeeded}
-                        onChange={(e) => setNewTask({ ...newTask, workersNeeded: parseInt(e.target.value) })}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="location">{t.location}</Label>
-                      <Input
-                        id="location"
-                        value={newTask.location}
-                        onChange={(e) => setNewTask({ ...newTask, location: e.target.value })}
-                        placeholder={language === 'en' ? 'Enter location' : 'ಸ್ಥಳ ನಮೂದಿಸಿ'}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="duration">{t.duration}</Label>
-                      <Input
-                        id="duration"
-                        value={newTask.duration}
-                        onChange={(e) => setNewTask({ ...newTask, duration: e.target.value })}
-                        placeholder={language === 'en' ? 'e.g., 4 hours' : 'ಉದಾ., 4 ಗಂಟೆಗಳು'}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="description">{t.description}</Label>
-                    <Textarea
-                      id="description"
-                      value={newTask.description}
-                      onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                      placeholder={language === 'en' ? 'Enter task description' : 'ಕಾರ್ಯದ ವಿವರಣೆ ನಮೂದಿಸಿ'}
-                      rows={3}
-                    />
-                  </div>
-
-                  {/* Worker Selection Section */}
-                  {newTask.type && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-base font-semibold">{t.selectWorkers}</Label>
-                        <div className="text-sm text-muted-foreground">
-                          {language === 'en'
-                            ? `Selected: ${selectedWorkers.length}/${newTask.workersNeeded}`
-                            : `ಆಯ್ಕೆಯಾಗಿರುವುದು: ${selectedWorkers.length}/${newTask.workersNeeded}`
-                          }
-                        </div>
-                      </div>
-
-                      <div className="border rounded-lg p-4 max-h-60 overflow-y-auto">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {getWorkersForTaskType(newTask.type).map((worker) => (
-                            <div key={worker.id} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-muted/50">
-                              <Checkbox
-                                id={`worker-${worker.id}`}
-                                checked={selectedWorkers.includes(worker.id)}
-                                onCheckedChange={(checked) => handleWorkerSelection(worker.id, checked as boolean)}
-                                disabled={selectedWorkers.length >= newTask.workersNeeded && !selectedWorkers.includes(worker.id)}
-                              />
-                              <div className="flex items-center space-x-3 flex-1">
-                                <Avatar className="h-8 w-8">
-                                  <AvatarImage src={worker.profilePic} alt={worker.name} />
-                                  <AvatarFallback className="text-xs">
-                                    {worker.name.split(' ').map(n => n[0]).join('')}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium truncate">{worker.name}</p>
-                                    <div className={`w-2 h-2 rounded-full ${worker.availability ? 'bg-green-500' : 'bg-red-500'}`} />
-                                  </div>
-                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    <MapPin className="h-3 w-3" />
-                                    <span className="truncate">{worker.location}</span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <span className="text-yellow-400 text-xs">★</span>
-                                  <span className="text-xs">{worker.rating}</span>
-                                </div>
+              {/* Task List for Selected Date */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">
+                    {selectedDate
+                      ? format(selectedDate, 'MMM dd, yyyy')
+                      : (language === 'en' ? 'Select a Date' : 'ದಿನಾಂಕ ಆಯ್ಕೆಮಾಡಿ')
+                    }
+                  </CardTitle>
+                  <CardDescription>
+                    {language === 'en'
+                      ? 'Tasks scheduled for this date'
+                      : 'ಈ ದಿನಾಂಕಕ್ಕೆ ವೇಳಾಪಟ್ಟಿ ಮಾಡಿದ ಕಾರ್ಯಗಳು'
+                    }
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {selectedDate ? (
+                    <div className="space-y-3">
+                      {tasks
+                        .filter(task => task.date === format(selectedDate, 'yyyy-MM-dd'))
+                        .map((task) => (
+                          <div key={task.id} className="border rounded-lg p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-medium text-sm">{task.title}</h4>
+                              <Badge className={`${getStatusColor(task.status)} text-white text-xs`}>
+                                {t[task.status as keyof typeof t] || task.status}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-muted-foreground space-y-1">
+                              <div className="flex items-center gap-1">
+                                <MapPin className="h-3 w-3" />
+                                <span>{task.location}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                <span>{task.duration}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                <span>{task.workersNeeded} workers needed</span>
                               </div>
                             </div>
-                          ))}
-                        </div>
-
-                        {getWorkersForTaskType(newTask.type).length === 0 && (
-                          <div className="text-center py-8 text-muted-foreground">
-                            {language === 'en'
-                              ? 'No available workers found for this task type'
-                              : 'ಈ ಕಾರ್ಯದ ಪ್ರಕಾರಕ್ಕೆ ಯಾವುದೇ ಲಭ್ಯವಿರುವ ಕೆಲಸಗಾರರು ಕಂಡುಬಂದಿಲ್ಲ'
-                            }
+                            {task.description && (
+                              <p className="text-xs text-muted-foreground mt-2">
+                                {task.description}
+                              </p>
+                            )}
                           </div>
-                        )}
-                      </div>
-
-                      {selectedWorkers.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          <span className="text-sm font-medium">
-                            {language === 'en' ? 'Selected workers:' : 'ಆಯ್ಕೆಯಾದ ಕೆಲಸಗಾರರು:'}
-                          </span>
-                          {selectedWorkers.map(workerId => {
-                            const worker = mockWorkers.find(w => w.id === workerId)
-                            return worker ? (
-                              <Badge key={worker.id} variant="secondary" className="text-xs">
-                                {worker.name}
-                              </Badge>
-                            ) : null
-                          })}
+                        ))}
+                      {tasks.filter(task => task.date === format(selectedDate, 'yyyy-MM-dd')).length === 0 && (
+                        <div className="text-center py-6 text-muted-foreground">
+                          <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">
+                            {language === 'en'
+                              ? 'No tasks scheduled for this date'
+                              : 'ಈ ದಿನಾಂಕಕ್ಕೆ ಯಾವುದೇ ಕಾರ್ಯಗಳು ವೇಳಾಪಟ್ಟಿ ಮಾಡಲಾಗಿಲ್ಲ'
+                            }
+                          </p>
                         </div>
                       )}
                     </div>
+                  ) : (
+                    <div className="text-center py-6 text-muted-foreground">
+                      <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">
+                        {language === 'en'
+                          ? 'Click on a date to view scheduled tasks'
+                          : 'ವೇಳಾಪಟ್ಟಿ ಮಾಡಿದ ಕಾರ್ಯಗಳನ್ನು ವೀಕ್ಷಿಸಲು ದಿನಾಂಕದ ಮೇಲೆ ಕ್ಲಿಕ್ ಮಾಡಿ'
+                        }
+                      </p>
+                    </div>
                   )}
-
-                  <div className="flex gap-2 pt-4">
-                    <Button onClick={handleCreateTask} className="flex-1">
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      {t.submitTask}
-                    </Button>
-                    <Button variant="outline" onClick={resetForm}>
-                      {t.cancel}
-                    </Button>
-                  </div>
                 </CardContent>
               </Card>
-            )}
+            </div>
+
+            {/* Task Statistics */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    {language === 'en' ? 'This Week' : 'ಈ ವಾರ'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {tasks.filter(task => {
+                      const taskDate = new Date(task.date);
+                      const weekStart = new Date();
+                      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+                      const weekEnd = new Date(weekStart);
+                      weekEnd.setDate(weekStart.getDate() + 6);
+                      return taskDate >= weekStart && taskDate <= weekEnd;
+                    }).length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'en' ? 'tasks scheduled' : 'ಕಾರ್ಯಗಳು ವೇಳಾಪಟ್ಟಿ'}
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    {language === 'en' ? 'This Month' : 'ಈ ತಿಂಗಳು'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {tasks.filter(task => {
+                      const taskDate = new Date(task.date);
+                      const currentMonth = new Date();
+                      return taskDate.getMonth() === currentMonth.getMonth() &&
+                             taskDate.getFullYear() === currentMonth.getFullYear();
+                    }).length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'en' ? 'tasks scheduled' : 'ಕಾರ್ಯಗಳು ವೇಳಾಪಟ್ಟಿ'}
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    {language === 'en' ? 'Pending Approval' : 'ಅನುಮೋದನೆ ಬಾಕಿ'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-yellow-600">
+                    {tasks.filter(t => t.status === 'pending').length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'en' ? 'awaiting approval' : 'ಅನುಮೋದನೆಗಾಗಿ ಕಾಯುತ್ತಿದೆ'}
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    {language === 'en' ? 'Completed' : 'ಪೂರ್ಣಗೊಂಡಿದೆ'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-600">
+                    {tasks.filter(t => t.status === 'completed').length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'en' ? 'tasks finished' : 'ಕಾರ್ಯಗಳು ಮುಗಿದಿವೆ'}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Upcoming Tasks List */}
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {language === 'en' ? 'Upcoming Tasks' : 'ಮುಂಬರುವ ಕಾರ್ಯಗಳು'}
+                </CardTitle>
+                <CardDescription>
+                  {language === 'en'
+                    ? 'Tasks scheduled for the next 7 days'
+                    : 'ಮುಂದಿನ 7 ದಿನಗಳಲ್ಲಿ ವೇಳಾಪಟ್ಟಿ ಮಾಡಿದ ಕಾರ್ಯಗಳು'
+                  }
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {tasks
+                    .filter(task => {
+                      const taskDate = new Date(task.date);
+                      const today = new Date();
+                      const nextWeek = new Date(today);
+                      nextWeek.setDate(today.getDate() + 7);
+                      return taskDate >= today && taskDate <= nextWeek;
+                    })
+                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                    .map((task) => (
+                      <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-3 h-3 rounded-full ${getStatusColor(task.status)}`} />
+                          <div>
+                            <h4 className="font-medium">{task.title}</h4>
+                            <p className="text-sm text-muted-foreground">{task.date} • {task.location}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <Badge className={`${getStatusColor(task.status)} text-white text-xs mb-1`}>
+                            {t[task.status as keyof typeof t] || task.status}
+                          </Badge>
+                          <p className="text-xs text-muted-foreground">
+                            {task.workersNeeded} workers
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  {tasks.filter(task => {
+                    const taskDate = new Date(task.date);
+                    const today = new Date();
+                    const nextWeek = new Date(today);
+                    nextWeek.setDate(today.getDate() + 7);
+                    return taskDate >= today && taskDate <= nextWeek;
+                  }).length === 0 && (
+                    <div className="text-center py-6 text-muted-foreground">
+                      <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">
+                        {language === 'en'
+                          ? 'No upcoming tasks in the next 7 days'
+                          : 'ಮುಂದಿನ 7 ದಿನಗಳಲ್ಲಿ ಯಾವುದೇ ಮುಂಬರುವ ಕಾರ್ಯಗಳಿಲ್ಲ'
+                        }
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Feedback Tab */}
@@ -718,12 +919,106 @@ const EmployerDashboard = () => {
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold">{t.feedback}</h2>
               <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => setShowEmployerFeedbackForm(true)}
+                  className="flex items-center gap-2"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  {language === 'en' ? 'Submit Feedback' : 'ಪ್ರತಿಕ್ರಿಯೆ ಸಲ್ಲಿಸಿ'}
+                </Button>
                 <ThreeDIcon icon="feedback" />
                 <span className="text-sm text-muted-foreground">
                   {language === 'en' ? 'Real-time feedback from workers' : 'ಕೆಲಸಗಾರರಿಂದ ನೈಜ ಸಮಯದ ಪ್ರತಿಕ್ರಿಯೆ'}
                 </span>
               </div>
             </div>
+
+            {/* Employer Feedback Form */}
+            {showEmployerFeedbackForm && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{language === 'en' ? 'Submit Feedback to Supervisor' : 'ಸೂಪರ್‌ವೈಸರ್‌ಗೆ ಪ್ರತಿಕ್ರಿಯೆ ಸಲ್ಲಿಸಿ'}</CardTitle>
+                  <CardDescription>
+                    {language === 'en'
+                      ? 'Share your observations, suggestions, or concerns with the supervisor'
+                      : 'ಸೂಪರ್‌ವೈಸರ್‌ನೊಂದಿಗೆ ನಿಮ್ಮ ಅವಲೋಕನಗಳು, ಸಲಹೆಗಳು ಅಥವಾ ಆತಂಕಗಳನ್ನು ಹಂಚಿಕೊಳ್ಳಿ'
+                    }
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="subject">{language === 'en' ? 'Subject' : 'ವಿಷಯ'}</Label>
+                      <Input
+                        id="subject"
+                        value={employerFeedbackForm.subject}
+                        onChange={(e) => setEmployerFeedbackForm({ ...employerFeedbackForm, subject: e.target.value })}
+                        placeholder={language === 'en' ? 'Enter feedback subject' : 'ಪ್ರತಿಕ್ರಿಯೆ ವಿಷಯ ನಮೂದಿಸಿ'}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="category">{language === 'en' ? 'Category' : 'ವರ್ಗ'}</Label>
+                      <Select
+                        value={employerFeedbackForm.category}
+                        onValueChange={(value) => setEmployerFeedbackForm({ ...employerFeedbackForm, category: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={language === 'en' ? 'Select category' : 'ವರ್ಗ ಆಯ್ಕೆಮಾಡಿ'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Workers">{language === 'en' ? 'Workers' : 'ಕೆಲಸಗಾರರು'}</SelectItem>
+                          <SelectItem value="Tasks">{language === 'en' ? 'Tasks' : 'ಕಾರ್ಯಗಳು'}</SelectItem>
+                          <SelectItem value="General">{language === 'en' ? 'General' : 'ಸಾಮಾನ್ಯ'}</SelectItem>
+                          <SelectItem value="Performance">{language === 'en' ? 'Performance' : 'ಕಾರ್ಯಕ್ಷಮತೆ'}</SelectItem>
+                          <SelectItem value="Safety">{language === 'en' ? 'Safety' : 'ಸುರಕ್ಷತೆ'}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="priority">{language === 'en' ? 'Priority' : 'ಆದ್ಯತೆ'}</Label>
+                      <Select
+                        value={employerFeedbackForm.priority}
+                        onValueChange={(value) => setEmployerFeedbackForm({ ...employerFeedbackForm, priority: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Low">{language === 'en' ? 'Low' : 'ಕಡಿಮೆ'}</SelectItem>
+                          <SelectItem value="Medium">{language === 'en' ? 'Medium' : 'ಮಧ್ಯಮ'}</SelectItem>
+                          <SelectItem value="High">{language === 'en' ? 'High' : 'ಹೆಚ್ಚು'}</SelectItem>
+                          <SelectItem value="Urgent">{language === 'en' ? 'Urgent' : 'ಅತ್ಯವಶ್ಯಕ'}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="comment">{language === 'en' ? 'Comment' : 'ಪ್ರತಿಕ್ರಿಯೆ'}</Label>
+                    <Textarea
+                      id="comment"
+                      value={employerFeedbackForm.comment}
+                      onChange={(e) => setEmployerFeedbackForm({ ...employerFeedbackForm, comment: e.target.value })}
+                      placeholder={language === 'en' ? 'Enter your feedback or observation' : 'ನಿಮ್ಮ ಪ್ರತಿಕ್ರಿಯೆ ಅಥವಾ ಅವಲೋಕನವನ್ನು ನಮೂದಿಸಿ'}
+                      rows={4}
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-4">
+                    <Button onClick={handleEmployerFeedbackSubmit} className="flex-1">
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      {language === 'en' ? 'Submit Feedback' : 'ಪ್ರತಿಕ್ರಿಯೆ ಸಲ್ಲಿಸಿ'}
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowEmployerFeedbackForm(false)}>
+                      {t.cancel}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <FeedbackDisplay feedback={allFeedback} />
           </TabsContent>
         </Tabs>

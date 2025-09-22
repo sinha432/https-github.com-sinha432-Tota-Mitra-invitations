@@ -88,7 +88,7 @@ const WorkerDashboard = () => {
     setTheme(newTheme);
     document.documentElement.classList.toggle('dark', newTheme === 'dark');
   };
-  const AIAssistant = React.lazy(() => import('../components/AIAssistant'));
+  const AIAssistant = React.lazy(() => import('../components/EnhancedAIAssistant'));
   console.log('👷 WorkerDashboard component rendering...')
 
   const { user, logout, language, setLanguage } = useAuth()

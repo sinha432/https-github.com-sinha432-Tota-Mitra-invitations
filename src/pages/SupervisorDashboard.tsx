@@ -13,8 +13,11 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Calendar as CalendarUI } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Users,
   Calendar,
@@ -35,10 +38,13 @@ import {
   XCircle,
   Clock,
   BarChart3,
-  MessageSquare
+  MessageSquare,
+  Calendar as CalendarIcon
 } from 'lucide-react'
+import { format } from 'date-fns'
 import { useAuth } from '@/App'
 import { mockWorkers, mockTasks, mockFeedback, Feedback } from '@/data/mockData'
+import EmployerFeedbackDisplay from '@/components/EmployerFeedbackDisplay'
 import FeedbackDisplay from '@/components/FeedbackDisplay'
 import WeatherWidget from '@/components/WeatherWidget'
 import ThreeDIcon from '../components/ThreeDIcon';
@@ -46,16 +52,17 @@ import { toast } from 'sonner'
 
 const SupervisorDashboard = () => {
   // Import AI Assistant
-  const AIAssistant = React.lazy(() => import('../components/AIAssistant'));
+  const AIAssistant = React.lazy(() => import('../components/EnhancedAIAssistant'));
   console.log('👨‍💼 SupervisorDashboard component rendering...')
   
-  const { user, logout, language, setLanguage } = useAuth()
+  const { user, logout, language, setLanguage, employerFeedback } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedGroup, setSelectedGroup] = useState('all')
   const [selectedSkill, setSelectedSkill] = useState('all')
   const [availabilityFilter, setAvailabilityFilter] = useState('all')
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [tasks, setTasks] = useState(mockTasks)
+  const [selectedDate, setSelectedDate] = useState<Date>()
   const [newTask, setNewTask] = useState({
     title: '',
     type: '',
@@ -655,14 +662,26 @@ const SupervisorDashboard = () => {
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label htmlFor="date" className="font-medium">{t.date}</label>
-                      <input
-                        id="date"
-                        type="date"
-                        className="w-full border rounded px-2 py-1"
-                        value={newTask.date}
-                        onChange={e => setNewTask({ ...newTask, date: e.target.value })}
-                      />
+                      <Label>{t.date}</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full justify-start text-left">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {selectedDate ? format(selectedDate, 'PPP') : language === 'en' ? 'Pick a date' : 'ದಿನಾಂಕ ಆಯ್ಕೆಮಾಡಿ'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <CalendarUI
+                            mode="single"
+                            selected={selectedDate}
+                            onSelect={(date) => {
+                              setSelectedDate(date)
+                              setNewTask({ ...newTask, date: date ? format(date, 'yyyy-MM-dd') : '' })
+                            }}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     <div className="space-y-2">
                       <label htmlFor="workersNeeded" className="font-medium">{t.workersNeeded}</label>
@@ -852,15 +871,40 @@ const SupervisorDashboard = () => {
           {/* Feedback Tab */}
           <TabsContent value="feedback" className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">{t.workerFeedback}</h2>
+              <h2 className="text-2xl font-bold">{t.feedback}</h2>
               <div className="flex items-center gap-2">
                 <ThreeDIcon icon="feedback" />
                 <span className="text-sm text-muted-foreground">
-                  {language === 'en' ? 'Live feedback from workers' : 'ಕೆಲಸಗಾರರಿಂದ ನೈಜ ಸಮಯದ ಪ್ರತಿಕ್ರಿಯೆ'}
+                  {language === 'en' ? 'Feedback from workers and employers' : 'ಕೆಲಸಗಾರರು ಮತ್ತು ಉದ್ಯೋಗದಾತರಿಂದ ಪ್ರತಿಕ್ರಿಯೆ'}
                 </span>
               </div>
             </div>
-            <FeedbackDisplay feedback={allFeedback} />
+
+            {/* Employer Feedback Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-4">
+                <MessageSquare className="h-5 w-5 text-blue-600" />
+                <h3 className="text-lg font-semibold">
+                  {language === 'en' ? 'Employer Feedback' : 'ಉದ್ಯೋಗದಾತರ ಪ್ರತಿಕ್ರಿಯೆ'}
+                </h3>
+                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                  {employerFeedback.length}
+                </Badge>
+              </div>
+              <EmployerFeedbackDisplay feedback={employerFeedback} language={language} />
+            </div>
+
+            {/* Worker Feedback Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-4">
+                <MessageSquare className="h-5 w-5 text-green-600" />
+                <h3 className="text-lg font-semibold">{t.workerFeedback}</h3>
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                  {allFeedback.length}
+                </Badge>
+              </div>
+              <FeedbackDisplay feedback={allFeedback} />
+            </div>
           </TabsContent>
         </Tabs>
       </div>

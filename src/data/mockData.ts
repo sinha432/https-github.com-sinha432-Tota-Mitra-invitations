@@ -41,6 +41,16 @@ export interface Feedback {
   createdAt: string
 }
 
+export interface EmployerFeedback {
+  id: string
+  subject: string
+  comment: string
+  category: 'Workers' | 'Tasks' | 'General' | 'Performance' | 'Safety'
+  priority: 'Low' | 'Medium' | 'High' | 'Urgent'
+  employerName: string
+  createdAt: string
+}
+
 export const mockWorkers: Worker[] = [
   {
     id: '1',
@@ -1064,6 +1074,54 @@ export const mockFeedback: Feedback[] = [
     rating: 4,
     comment: 'Good experience overall. Payment was on time.',
     createdAt: '2024-01-18T18:15:00Z'
+  }
+]
+
+export const mockEmployerFeedback: EmployerFeedback[] = [
+  {
+    id: '1',
+    subject: 'Worker Performance in North Field',
+    comment: 'The workers in Group 1 have been performing exceptionally well in the arecanut harvesting. Their efficiency has improved by 20% compared to last month.',
+    category: 'Workers',
+    priority: 'Medium',
+    employerName: 'Rajesh Kumar',
+    createdAt: '2024-01-20T10:30:00Z'
+  },
+  {
+    id: '2',
+    subject: 'Safety Equipment Requirements',
+    comment: 'Need to provide better safety harnesses for coconut tree climbing workers. Current equipment is showing signs of wear and tear.',
+    category: 'Safety',
+    priority: 'High',
+    employerName: 'Rajesh Kumar',
+    createdAt: '2024-01-19T14:20:00Z'
+  },
+  {
+    id: '3',
+    subject: 'Task Scheduling Optimization',
+    comment: 'Medicine spray tasks should be scheduled in the early morning to avoid strong winds. Current afternoon scheduling is causing uneven application.',
+    category: 'Tasks',
+    priority: 'Medium',
+    employerName: 'Priya Sharma',
+    createdAt: '2024-01-18T09:15:00Z'
+  },
+  {
+    id: '4',
+    subject: 'Worker Training Program',
+    comment: 'The new workers from Group 5 need additional training on proper harvesting techniques. Quality of arecanuts has decreased slightly.',
+    category: 'Performance',
+    priority: 'High',
+    employerName: 'Rajesh Kumar',
+    createdAt: '2024-01-17T16:45:00Z'
+  },
+  {
+    id: '5',
+    subject: 'Weather Impact on Work',
+    comment: 'Recent rains have affected the drying process of harvested arecanuts. Need to arrange covered storage areas for better quality control.',
+    category: 'General',
+    priority: 'Medium',
+    employerName: 'Priya Sharma',
+    createdAt: '2024-01-16T11:30:00Z'
   }
 ]
 

@@ -46,7 +46,7 @@ import { toast } from 'sonner'
 
 const SupervisorDashboard = () => {
   // Import AI Assistant
-  const AIAssistant = React.lazy(() => import('../components/AIAssistant'));
+  const AIAssistant = React.lazy(() => import('../components/EnhancedAIAssistant'));
   console.log('👨‍💼 SupervisorDashboard component rendering...')
 
   const { user, logout, language, setLanguage } = useAuth()

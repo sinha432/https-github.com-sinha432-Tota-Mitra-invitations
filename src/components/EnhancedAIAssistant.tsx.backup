@@ -1,0 +1,813 @@
+import ThreeDOrb from './ThreeDOrb';
+import React, { useState, useEffect, useRef, useContext } from 'react';
+import { FaMicrophone, FaPaperPlane, FaBrain, FaChartLine, FaLanguage, FaLightbulb, FaSearch, FaUsers, FaTasks, FaStar } from 'react-icons/fa';
+import '../AIAssistant.css';
+import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
+import { useAuth } from '@/App';
+import { mockWorkers, mockTasks, mockFeedback, mockEmployerFeedback, getWorkersByGroup, getAvailableWorkers, getWorkersBySkill, getFeedbackByTask } from '@/data/mockData';
+
+// Enhanced interfaces for advanced AI features
+interface ConversationContext {
+  userRole: 'employer' | 'supervisor' | 'worker';
+  lastTopic: string;
+  preferences: {
+    language: 'en' | 'kn';
+    responseStyle: 'brief' | 'detailed';
+    notifications: boolean;
+  };
+  recentQueries: string[];
+  conversationHistory: Array<{ query: string; response: string; timestamp: Date }>;
+  currentContext: {
+    activeWorkers?: string[];
+    activeTasks?: string[];
+    activeGroups?: string[];
+    timeRange?: string;
+  };
+}
+
+interface KnowledgeNode {
+  id: string;
+  type: 'worker' | 'task' | 'group' | 'skill' | 'location' | 'feedback' | 'performance';
+  name: string;
+  relationships: string[];
+  metadata: any;
+  connections: { nodeId: string; strength: number; type: string }[];
+}
+
+interface PredictiveInsight {
+  type: 'productivity' | 'weather' | 'assignment' | 'performance' | 'trend' | 'anomaly';
+  confidence: number;
+  recommendation: string;
+  reasoning: string;
+  data?: any;
+  priority: 'low' | 'medium' | 'high';
+}
+
+interface DataContext {
+  workers: typeof mockWorkers;
+  tasks: typeof mockTasks;
+  feedback: typeof mockFeedback;
+  employerFeedback: typeof mockEmployerFeedback;
+  user: any;
+  language: 'en' | 'kn';
+}
+
+interface EnhancedAIAssistantProps {
+  appData?: DataContext;
+  onSend?: (msg: string) => void;
+  theme?: string;
+  userRole?: 'employer' | 'supervisor' | 'worker';
+}
+
+export default function EnhancedAIAssistant({ appData, onSend, theme, userRole = 'employer' }: EnhancedAIAssistantProps) {
+  const { user, language, employerFeedback } = useAuth();
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<Array<{
+    sender: 'user' | 'ai',
+    text: string,
+    timestamp: Date,
+    type?: 'query' | 'insight' | 'recommendation' | 'analysis' | 'suggestion'
+    metadata?: any;
+  }>>([]);
+
+  const [conversationContext, setConversationContext] = useState<ConversationContext>({
+    userRole,
+    lastTopic: '',
+    preferences: {
+      language: language || 'en',
+      responseStyle: 'detailed',
+      notifications: true
+    },
+    recentQueries: [],
+    conversationHistory: [],
+    currentContext: {}
+  });
+
+  const [knowledgeGraph, setKnowledgeGraph] = useState<KnowledgeNode[]>([]);
+  const [predictiveInsights, setPredictiveInsights] = useState<PredictiveInsight[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [activeInsight, setActiveInsight] = useState<PredictiveInsight | null>(null);
+
+  const {
+    transcript,
+    listening,
+    resetTranscript,
+    browserSupportsSpeechRecognition
+  } = useSpeechRecognition();
+
+  // Initialize with full app data
+  useEffect(() => {
+    if (mockWorkers && mockTasks && mockFeedback && employerFeedback) {
+      buildComprehensiveKnowledgeGraph();
+      generateAdvancedPredictiveInsights();
+      generateContextualSuggestions();
+    }
+  }, [mockWorkers, mockTasks, mockFeedback, employerFeedback, user]);
+
+  // Update conversation context when language changes
+  useEffect(() => {
+    setConversationContext(prev => ({
+      ...prev,
+      preferences: { ...prev.preferences, language: language || 'en' }
+    }));
+  }, [language]);
+
+  // Build comprehensive knowledge graph
+  const buildComprehensiveKnowledgeGraph = () => {
+    const nodes: KnowledgeNode[] = [];
+
+    // Add worker nodes with enhanced relationships
+    mockWorkers.forEach((worker) => {
+      const workerConnections = [];
+
+      // Group connections
+      workerConnections.push({ nodeId: worker.group, strength: 0.9, type: 'group' });
+
+      // Skill connections
+      worker.skills.forEach(skill => {
+        workerConnections.push({ nodeId: skill, strength: 0.8, type: 'skill' });
+      });
+
+      // Location connections
+      workerConnections.push({ nodeId: worker.location, strength: 0.7, type: 'location' });
+
+      // Performance-based connections
+      const performanceLevel = worker.rating >= 4.5 ? 'high' : worker.rating >= 3.5 ? 'medium' : 'low';
+      workerConnections.push({ nodeId: `performance-${performanceLevel}`, strength: 0.6, type: 'performance' });
+
+      nodes.push({
+        id: worker.id,
+        type: 'worker',
+        name: worker.name,
+        relationships: [
+          worker.group,
+          ...worker.skills,
+          worker.location,
+          `rating-${worker.rating}`,
+          `availability-${worker.availability}`,
+          `performance-${performanceLevel}`
+        ],
+        metadata: worker,
+        connections: workerConnections
+      });
+    });
+
+    // Add task nodes with enhanced relationships
+    mockTasks.forEach((task) => {
+      const taskConnections = [];
+
+      // Worker connections
+      task.assignedWorkers.forEach(workerId => {
+        taskConnections.push({ nodeId: workerId, strength: 0.8, type: 'worker' });
+      });
+
+      // Location connections
+      taskConnections.push({ nodeId: task.location, strength: 0.7, type: 'location' });
+
+      // Type connections
+      taskConnections.push({ nodeId: task.type, strength: 0.9, type: 'skill' });
+
+      nodes.push({
+        id: task.id,
+        type: 'task',
+        name: task.title,
+        relationships: [
+          task.type,
+          task.location,
+          task.status,
+          ...task.assignedWorkers
+        ],
+        metadata: task,
+        connections: taskConnections
+      });
+    });
+
+    // Add group nodes
+    const groups = ['Group 1', 'Group 2', 'Group 3', 'Group 4', 'Group 5'];
+    groups.forEach(group => {
+      const groupWorkers = mockWorkers.filter(w => w.group === group);
+      const groupTasks = mockTasks.filter(t => t.assignedWorkers.some(wId =>
+        groupWorkers.some(gw => gw.id === wId)
+      ));
+
+      nodes.push({
+        id: group,
+        type: 'group',
+        name: group,
+        relationships: groupWorkers.map(w => w.id),
+        metadata: {
+          workerCount: groupWorkers.length,
+          taskCount: groupTasks.length,
+          avgRating: groupWorkers.reduce((sum, w) => sum + w.rating, 0) / groupWorkers.length
+        },
+        connections: groupWorkers.map(w => ({ nodeId: w.id, strength: 0.9, type: 'worker' }))
+      });
+    });
+
+    // Add skill nodes
+    const skills = ['Arecanut Harvesting', 'Coconut Harvesting', 'Pepper Vine Support Work', 'Banana Cultivation Assistance', 'Arecanut Medicine Spray', 'General Farm Labor'];
+    skills.forEach(skill => {
+      const skilledWorkers = mockWorkers.filter(w => w.skills.includes(skill));
+
+      nodes.push({
+        id: skill,
+        type: 'skill',
+        name: skill,
+        relationships: skilledWorkers.map(w => w.id),
+        metadata: {
+          workerCount: skilledWorkers.length,
+          avgRating: skilledWorkers.reduce((sum, w) => sum + w.rating, 0) / skilledWorkers.length
+        },
+        connections: skilledWorkers.map(w => ({ nodeId: w.id, strength: 0.8, type: 'worker' }))
+      });
+    });
+
+    // Add location nodes
+    const locations = ['Puttur', 'Belthangady', 'Mangalore', 'Bantwal', 'Sullia'];
+    locations.forEach(location => {
+      const locationWorkers = mockWorkers.filter(w => w.location === location);
+      const locationTasks = mockTasks.filter(t => t.location.includes(location));
+
+      nodes.push({
+        id: location,
+        type: 'location',
+        name: location,
+        relationships: [...locationWorkers.map(w => w.id), ...locationTasks.map(t => t.id)],
+        metadata: {
+          workerCount: locationWorkers.length,
+          taskCount: locationTasks.length
+        },
+        connections: [
+          ...locationWorkers.map(w => ({ nodeId: w.id, strength: 0.7, type: 'worker' })),
+          ...locationTasks.map(t => ({ nodeId: t.id, strength: 0.6, type: 'task' }))
+        ]
+      });
+    });
+
+    // Add feedback nodes
+    [...mockFeedback, ...employerFeedback].forEach((feedback) => {
+      nodes.push({
+        id: feedback.id,
+        type: 'feedback',
+        name: `Feedback ${feedback.id}`,
+        relationships: [
+          'workerId' in feedback ? feedback.workerId : feedback.employerName,
+          'taskId' in feedback ? feedback.taskId : ''
+        ],
+        metadata: feedback,
+        connections: [
+          { nodeId: 'workerId' in feedback ? feedback.workerId : feedback.employerName, strength: 0.8, type: 'worker' },
+          ...('taskId' in feedback ? [{ nodeId: feedback.taskId, strength: 0.7, type: 'task' }] : [])
+        ]
+      });
+    });
+
+    setKnowledgeGraph(nodes);
+  };
+
+  // Generate advanced predictive insights
+  const generateAdvancedPredictiveInsights = () => {
+    const insights: PredictiveInsight[] = [];
+
+    // Productivity insights
+    const avgRating = mockWorkers.reduce((sum, w) => sum + w.rating, 0) / mockWorkers.length;
+    const topPerformers = mockWorkers.filter(w => w.rating >= 4.5);
+    const lowPerformers = mockWorkers.filter(w => w.rating < 3.0);
+
+    insights.push({
+      type: 'productivity',
+      confidence: 0.92,
+      recommendation: `Overall productivity is ${avgRating > 4 ? 'excellent' : avgRating > 3.5 ? 'good' : 'needs improvement'}`,
+      reasoning: `Based on ${mockWorkers.length} workers with average rating of ${avgRating.toFixed(1)}★. ${topPerformers.length} top performers identified.`,
+      data: { avgRating, topPerformers: topPerformers.length, lowPerformers: lowPerformers.length },
+      priority: avgRating < 3.5 ? 'high' : 'medium'
+    });
+
+    // Worker availability insights
+    const availableWorkers = mockWorkers.filter(w => w.availability);
+    const unavailableWorkers = mockWorkers.filter(w => !w.availability);
+
+    if (availableWorkers.length < mockTasks.length) {
+      insights.push({
+        type: 'assignment',
+        confidence: 0.88,
+        recommendation: `Worker shortage detected: ${availableWorkers.length} available vs ${mockTasks.length} pending tasks`,
+        reasoning: `Only ${availableWorkers.length} workers available for ${mockTasks.length} tasks. Consider reassigning or hiring additional workers.`,
+        data: { available: availableWorkers.length, needed: mockTasks.length },
+        priority: 'high'
+      });
+    }
+
+    // Group performance insights
+    const groups = ['Group 1', 'Group 2', 'Group 3', 'Group 4', 'Group 5'];
+    groups.forEach(group => {
+      const groupWorkers = mockWorkers.filter(w => w.group === group);
+      const groupTasks = mockTasks.filter(t => t.assignedWorkers.some(wId =>
+        groupWorkers.some(gw => gw.id === wId)
+      ));
+
+      if (groupWorkers.length > 0) {
+        const groupAvgRating = groupWorkers.reduce((sum, w) => sum + w.rating, 0) / groupWorkers.length;
+
+        insights.push({
+          type: 'performance',
+          confidence: 0.85,
+          recommendation: `${group} performance: ${groupAvgRating.toFixed(1)}★ average rating`,
+          reasoning: `Group ${group} has ${groupWorkers.length} workers with ${groupTasks.length} assigned tasks`,
+          data: { group, avgRating: groupAvgRating, workerCount: groupWorkers.length, taskCount: groupTasks.length },
+          priority: groupAvgRating < 3.5 ? 'high' : 'low'
+        });
+      }
+    });
+
+    // Skill distribution insights
+    const skills = ['Arecanut Harvesting', 'Coconut Harvesting', 'Pepper Vine Support Work', 'Banana Cultivation Assistance', 'Arecanut Medicine Spray', 'General Farm Labor'];
+    skills.forEach(skill => {
+      const skilledWorkers = mockWorkers.filter(w => w.skills.includes(skill));
+      const skillTasks = mockTasks.filter(t => t.type === skill);
+
+      if (skilledWorkers.length < skillTasks.length) {
+        insights.push({
+          type: 'anomaly',
+          confidence: 0.82,
+          recommendation: `Skill gap in ${skill}: ${skilledWorkers.length} workers vs ${skillTasks.length} tasks`,
+          reasoning: `Need ${skillTasks.length - skilledWorkers.length} additional workers with ${skill} skills`,
+          data: { skill, availableWorkers: skilledWorkers.length, requiredTasks: skillTasks.length },
+          priority: 'medium'
+        });
+      }
+    });
+
+    // Trend analysis insights
+    const recentFeedback = [...mockFeedback, ...employerFeedback].slice(0, 10);
+    const avgRecentRating = mockFeedback.reduce((sum, f) => sum + f.rating, 0) / mockFeedback.length;
+
+    insights.push({
+      type: 'trend',
+      confidence: 0.90,
+      recommendation: `Recent performance trend: ${avgRecentRating.toFixed(1)}★ average rating`,
+      reasoning: `Based on ${recentFeedback.length} recent feedback entries. ${avgRecentRating > 4 ? 'Improving' : avgRecentRating > 3 ? 'Stable' : 'Declining'} trend detected.`,
+      data: { avgRating: avgRecentRating, feedbackCount: recentFeedback.length },
+      priority: avgRecentRating < 3.5 ? 'high' : 'low'
+    });
+
+    setPredictiveInsights(insights);
+  };
+
+  // Generate contextual suggestions
+  const generateContextualSuggestions = () => {
+    const suggestions: string[] = [];
+
+    // Role-based suggestions
+    if (userRole === 'supervisor') {
+      suggestions.push(
+        'Show me worker performance across all groups',
+        'Which group has the highest productivity?',
+        'Find workers available for urgent tasks',
+        'Show me skill distribution across groups',
+        'What are the upcoming tasks this week?'
+      );
+    } else if (userRole === 'employer') {
+      suggestions.push(
+        'Show me available workers for today',
+        'Which workers are best for harvesting tasks?',
+        'Show me task completion status',
+        'Find workers in my preferred location',
+        'What\'s the overall team performance?'
+      );
+    }
+
+    // Data-driven suggestions
+    const availableWorkers = mockWorkers.filter(w => w.availability);
+    if (availableWorkers.length > 0) {
+      suggestions.push(`Show me the ${availableWorkers.length} available workers`);
+    }
+
+    const pendingTasks = mockTasks.filter(t => t.status === 'pending');
+    if (pendingTasks.length > 0) {
+      suggestions.push(`Help me assign workers to ${pendingTasks.length} pending tasks`);
+    }
+
+    // Language-specific suggestions
+    if (conversationContext.preferences.language === 'kn') {
+      suggestions.push(
+        'ಗ್ರೂಪ್ 1 ರಲ್ಲಿ ಲಭ್ಯವಿರುವ ಕೆಲಸಗಾರರನ್ನು ತೋರಿಸಿ',
+        'ಅತ್ಯುತ್ತಮ ಕಾರ್ಯಕ್ಷಮತೆ ಇರುವ ಕೆಲಸಗಾರರನ್ನು ಹುಡುಕಿ',
+        'ಇಂದಿನ ಕಾರ್ಯಗಳ ಬಗ್ಗೆ ತಿಳಿಸಿ'
+      );
+    }
+
+    setSuggestions(suggestions);
+  };
+
+  // Enhanced natural language processing with advanced algorithms
+  const processNaturalLanguage = (query: string): {
+    intent: string;
+    entities: any;
+    confidence: number;
+    context: any;
+    sentiment: 'positive' | 'negative' | 'neutral'
+  } => {
+    const normalizedQuery = query.toLowerCase().trim();
+
+    // Enhanced intent classification with hierarchical matching and fuzzy logic
+    const intentPatterns = {
+      'worker_availability': [
+        'available workers', 'who is available', 'available now', 'free workers',
+        'workers on duty', 'workers ready', 'staff availability', 'team availability'
+      ],
+      'task_assignment': [
+        'assign worker', 'assign to task', 'who should do', 'assign task',
+        'allocate worker', 'worker for task', 'task assignment', 'assign to'
+      ],
+      'performance_analysis': [
+        'performance', 'productivity', 'how are workers doing', 'worker performance',
+        'team performance', 'group performance', 'worker ratings', 'productivity metrics'
+      ],
+      'schedule_management': [
+        'schedule', 'today schedule', 'task schedule', 'pending tasks',
+        'upcoming tasks', 'task list', 'daily schedule', 'work schedule'
+      ],
+      'worker_search': [
+        'find worker', 'who is', 'worker named', 'locate worker',
+        'search worker', 'worker details', 'worker info', 'find by name'
+      ],
+      'skill_matching': [
+        'skilled workers', 'who can do', 'workers for', 'expert in',
+        'workers with skill', 'skill matching', 'qualified workers', 'capable workers'
+      ],
+      'group_management': [
+        'group', 'team', 'group workers', 'group performance',
+        'team management', 'group analysis', 'group statistics', 'team overview'
+      ],
+      'predictive_insights': [
+        'predict', 'forecast', 'what if', 'trends', 'analytics',
+        'future', 'prediction', 'forecasting', 'trend analysis', 'predictive'
+      ],
+      'feedback_analysis': [
+        'feedback', 'reviews', 'comments', 'worker feedback',
+        'employer feedback', 'performance reviews', 'worker comments', 'feedback summary'
+      ],
+      'location_analysis': [
+        'location', 'where', 'workers in', 'tasks in',
+        'regional', 'area', 'place', 'workers from', 'location based'
+      ],
+      'comparison_analysis': [
+        'compare', 'versus', 'vs', 'better than', 'comparison',
+        'which is better', 'difference between', 'compare groups', 'compare workers'
+      ],
+      'optimization': [
+        'optimize', 'improve', 'better', 'efficiency',
+        'optimization', 'streamline', 'enhance', 'maximize'
+      ]
+    };
+
+    let bestIntent = 'general_query';
+    let bestConfidence = 0;
+    let matchedEntities: any = {};
+    let context: any = {};
+
+    // Multi-pattern matching with fuzzy logic
+    for (const [intent, patterns] of Object.entries(intentPatterns)) {
+      for (const pattern of patterns) {
+        const similarity = calculateStringSimilarity(normalizedQuery, pattern);
+        if (similarity > bestConfidence && similarity > 0.3) { // Lower threshold for better matching
+          bestConfidence = similarity;
+          bestIntent = intent;
+        }
+      }
+    }
+
+    // Enhanced entity extraction with fuzzy matching
+    matchedEntities = extractEntitiesWithFuzzyMatching(normalizedQuery);
+
+    // Context determination
+    context = determineQueryContext(normalizedQuery, matchedEntities);
+
+    // Sentiment analysis
+    const sentiment = analyzeSentiment(normalizedQuery);
+
+    return {
+      intent: bestIntent,
+      entities: matchedEntities,
+      confidence: Math.min(bestConfidence * 1.5, 0.98), // Boost confidence for better matches
+      context,
+      sentiment
+    };
+  };
+
+  // Calculate string similarity using Levenshtein distance
+  const calculateStringSimilarity = (str1: string, str2: string): number => {
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+
+    if (longer.length === 0) return 1.0;
+
+    const distance = levenshteinDistance(longer, shorter);
+    return (longer.length - distance) / longer.length;
+  };
+
+  // Levenshtein distance calculation
+  const levenshteinDistance = (str1: string, str2: string): number => {
+    const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
+
+    for (let i = 0; i <= str1.length; i += 1) matrix[0][i] = i;
+    for (let j = 0; j <= str2.length; j += 1) matrix[j][0] = j;
+
+    for (let j = 1; j <= str2.length; j += 1) {
+      for (let i = 1; i <= str1.length; i += 1) {
+        const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
+        matrix[j][i] = Math.min(
+          matrix[j][i - 1] + 1,
+          matrix[j - 1][i] + 1,
+          matrix[j - 1][i - 1] + indicator
+        );
+      }
+    }
+
+    return matrix[str2.length][str1.length];
+  };
+
+  // Enhanced entity extraction with fuzzy matching
+  const extractEntitiesWithFuzzyMatching = (query: string) => {
+    const entities: any = {
+      workers: [],
+      groups: [],
+      skills: [],
+      locations: [],
+      tasks: [],
+      timeframes: [],
+      numbers: [],
+      adjectives: []
+    };
+
+    // Enhanced worker name extraction with fuzzy matching
+    mockWorkers.forEach(worker => {
+      const nameParts = worker.name.toLowerCase().split(' ');
+      nameParts.forEach(part => {
+        if (part.length > 2) { // Only match meaningful name parts
+          const similarity = calculateStringSimilarity(query, part);
+          if (similarity > 0.6) { // Lower threshold for name matching
+            entities.workers.push({
+              name: worker.name,
+              id: worker.id,
+              confidence: similarity
+            });
+          }
+        }
+      });
+    });
+
+    // Group extraction with fuzzy matching
+    const groups = ['Group 1', 'Group 2', 'Group 3', 'Group 4', 'Group 5'];
+    groups.forEach(group => {
+      const similarity = calculateStringSimilarity(query, group.toLowerCase());
+      if (similarity > 0.5) {
+        entities.groups.push({ name: group, confidence: similarity });
+      }
+    });
+
+    // Skill extraction with fuzzy matching
+    const skills = ['Arecanut Harvesting', 'Coconut Harvesting', 'Pepper Vine Support Work', 'Banana Cultivation Assistance', 'Arecanut Medicine Spray', 'General Farm Labor'];
+    skills.forEach(skill => {
+      const skillWords = skill.toLowerCase().split(' ');
+      skillWords.forEach(word => {
+        if (word.length > 3) {
+          const similarity = calculateStringSimilarity(query, word);
+          if (similarity > 0.4) {
+            entities.skills.push({ name: skill, confidence: similarity });
+          }
+        }
+      });
+    });
+
+    // Location extraction with fuzzy matching
+    const locations = ['Puttur', 'Belthangady', 'Mangalore', 'Bantwal', 'Sullia'];
+    locations.forEach(location => {
+      const similarity = calculateStringSimilarity(query, location.toLowerCase());
+      if (similarity > 0.5) {
+        entities.locations.push({ name: location, confidence: similarity });
+      }
+    });
+
+    // Task extraction
+    mockTasks.forEach(task => {
+      const titleWords = task.title.toLowerCase().split(' ');
+      titleWords.forEach(word => {
+        if (word.length > 3) {
+          const similarity = calculateStringSimilarity(query, word);
+          if (similarity > 0.4) {
+            entities.tasks.push({ title: task.title, id: task.id, confidence: similarity });
+          }
+        }
+      });
+    });
+
+    // Number extraction
+    const numberMatch = query.match(/\d+/);
+    if (numberMatch) {
+      entities.numbers.push(parseInt(numberMatch[0]));
+    }
+
+    // Adjective extraction for sentiment
+    const adjectives = ['best', 'worst', 'good', 'bad', 'excellent', 'poor', 'top', 'bottom', 'highest', 'lowest'];
+    adjectives.forEach(adj => {
+      if (query.includes(adj)) {
+        entities.adjectives.push(adj);
+      }
+    });
+
+    return entities;
+  };
+
+  // Determine query context
+  const determineQueryContext = (query: string, entities: any) => {
+    const context: any = {
+      timeContext: 'current',
+      scope: 'general',
+      urgency: 'normal'
+    };
+
+    // Time context
+    if (query.includes('today') || query.includes('now') || query.includes('current')) {
+      context.timeContext = 'immediate';
+    } else if (query.includes('week') || query.includes('upcoming') || query.includes('future')) {
+      context.timeContext = 'week';
+    } else if (query.includes('month') || query.includes('monthly')) {
+      context.timeContext = 'month';
+    }
+
+    // Scope determination
+    if (entities.workers.length > 0) {
+      context.scope = 'worker_specific';
+      context.activeWorkers = entities.workers.map((w: any) => w.id);
+    } else if (entities.groups.length > 0) {
+      context.scope = 'group_specific';
+      context.activeGroups = entities.groups.map((g: any) => g.name);
+    } else if (entities.skills.length > 0) {
+      context.scope = 'skill_specific';
+    }
+
+    // Urgency determination
+    if (query.includes('urgent') || query.includes('immediate') || query.includes('asap')) {
+      context.urgency = 'high';
+    } else if (query.includes('soon') || query.includes('quickly')) {
+      context.urgency = 'medium';
+    }
+
+    return context;
+  };
+
+  // Simple sentiment analysis
+  const analyzeSentiment = (query: string): 'positive' | 'negative' | 'neutral' => {
+    const positiveWords = ['good', 'great', 'excellent', 'best', 'amazing', 'perfect', 'love', 'like'];
+    const negativeWords = ['bad', 'terrible', 'worst', 'awful', 'hate', 'dislike', 'poor', 'problem'];
+
+    const lowerQuery = query.toLowerCase();
+    const positiveCount = positiveWords.filter(word => lowerQuery.includes(word)).length;
+    const negativeCount = negativeWords.filter(word => lowerQuery.includes(word)).length;
+
+    if (positiveCount > negativeCount) return 'positive';
+    if (negativeCount > positiveCount) return 'negative';
+    return 'neutral';
+  };
+
+  // Enhanced response generation with context awareness
+  const generateResponse = (query: string, intent: string, entities: any, context: any, sentiment: string): string => {
+    // Update conversation context
+    setConversationContext(prev => ({
+      ...prev,
+      lastTopic: intent,
+      recentQueries: [...prev.recentQueries.slice(-4), query],
+      conversationHistory: [...prev.conversationHistory.slice(-9), { query, response: '', timestamp: new Date() }],
+      currentContext: context
+    }));
+
+    // Generate response based on intent
+    switch (intent) {
+      case 'worker_availability':
+        return handleWorkerAvailability(entities, context, sentiment);
+
+      case 'task_assignment':
+        return handleTaskAssignment(entities, context, sentiment);
+
+      case 'performance_analysis':
+        return handlePerformanceAnalysis(entities, context, sentiment);
+
+      case 'schedule_management':
+        return handleScheduleManagement(entities, context, sentiment);
+
+      case 'worker_search':
+        return handleWorkerSearch(entities, context, sentiment);
+
+      case 'skill_matching':
+        return handleSkillMatching(entities, context, sentiment);
+
+      case 'group_management':
+        return handleGroupManagement(entities, context, sentiment);
+
+      case 'predictive_insights':
+        return handlePredictiveInsights(entities, context, sentiment);
+
+      case 'feedback_analysis':
+        return handleFeedbackAnalysis(entities, context, sentiment);
+
+      case 'location_analysis':
+        return handleLocationAnalysis(entities, context, sentiment);
+
+      case 'comparison_analysis':
+        return handleComparisonAnalysis(entities, context, sentiment);
+
+      case 'optimization':
+        return handleOptimization(entities, context, sentiment);
+
+      default:
+        return generateGeneralResponse(query, entities, context, sentiment);
+    }
+  };
+
+  // Enhanced response handlers with full data connectivity
+  const handleWorkerAvailability = (entities: any, context: any, sentiment: string) => {
+    const { language } = conversationContext.preferences;
+    const availableWorkers = mockWorkers.filter(w => w.availability);
+
+    if (entities.groups.length > 0) {
+      const groupWorkers = availableWorkers.filter(w => w.group === entities.groups[0].name);
+      const groupData = knowledgeGraph.find(node => node.id === entities.groups[0].name);
+
+      return language === 'kn'
+        ? `ಗ್ರೂಪ್ ${entities.groups[0].name} ನಲ್ಲಿ ${groupWorkers.length} ಕೆಲಸಗಾರರು ಲಭ್ಯವಿದ್ದಾರೆ: ${groupWorkers.slice(0, 5).map(w => w.name).join(', ')}${groupWorkers.length > 5 ? ' ಮತ್ತು ಇನ್ನೂ ಇತರರು' : ''}. ಸರಾಸರಿ ರೇಟಿಂಗ್: ${groupData?.metadata?.avgRating?.toFixed(1) || 'N/A'}★`
+        : `Available workers in ${entities.groups[0].name}: ${groupWorkers.slice(0, 5).map(w => w.name).join(', ')}${groupWorkers.length > 5 ? ' and others' : ''}. Average rating: ${groupData?.metadata?.avgRating?.toFixed(1) || 'N/A'}★`;
+    }
+
+    if (entities.locations.length > 0) {
+      const locationWorkers = availableWorkers.filter(w => w.location === entities.locations[0].name);
+      return language === 'kn'
+        ? `${entities.locations[0].name} ನಲ್ಲಿ ${locationWorkers.length} ಕೆಲಸಗಾರರು ಲಭ್ಯವಿದ್ದಾರೆ: ${locationWorkers.slice(0, 5).map(w => w.name).join(', ')}${locationWorkers.length > 5 ? ' ಮತ್ತು ಇನ್ನೂ ಇತರರು' : ''}`
+        : `${locationWorkers.length} workers available in ${entities.locations[0].name}: ${locationWorkers.slice(0, 5).map(w => w.name).join(', ')}${locationWorkers.length > 5 ? ' and others' : ''}`;
+    }
+
+    return language === 'kn'
+      ? `ಒಟ್ಟು ${availableWorkers.length} ಕೆಲಸಗಾರರು ಲಭ್ಯವಿದ್ದಾರೆ: ${availableWorkers.slice(0, 5).map(w => w.name).join(', ')}${availableWorkers.length > 5 ? ' ಮತ್ತು ಇನ್ನೂ ಇತರರು' : ''}. ಅತ್ಯುತ್ತಮ ಕಾರ್ಯಕ್ಷಮತೆ: ${availableWorkers.filter(w => w.rating >= 4.5).length} ಕೆಲಸಗಾರರು`
+      : `Total ${availableWorkers.length} workers available: ${availableWorkers.slice(0, 5).map(w => w.name).join(', ')}${availableWorkers.length > 5 ? ' and others' : ''}. Top performers: ${availableWorkers.filter(w => w.rating >= 4.5).length} workers`;
+  };
+
+  const handleTaskAssignment = (entities: any, context: any, sentiment: string) => {
+    const { language } = conversationContext.preferences;
+
+    if (entities.workers.length > 0 && entities.skills.length > 0) {
+      const worker = mockWorkers.find(w => w.name === entities.workers[0].name);
+      const isSkilled = worker?.skills.some(skill => entities.skills[0].name.includes(skill.split(' ')[0]));
+
+      if (isSkilled) {
+        const skillTasks = mockTasks.filter(t => t.type === entities.skills[0].name && t.status === 'pending');
+        return language === 'kn'
+          ? `${worker?.name} ${entities.skills[0].name} ಕೆಲಸಕ್ಕೆ ಸೂಕ್ತರಾಗಿದ್ದಾರೆ. ಅವರ ರೇಟಿಂಗ್: ${worker?.rating}★. ${skillTasks.length} ಬಾಕಿ ಇರುವ ಕೆಲಸಗಳಿವೆ.`
+          : `${worker?.name} is well-suited for ${entities.skills[0].name} tasks. Rating: ${worker?.rating}★. ${skillTasks.length} pending tasks available.`;
+      } else {
+        const alternativeWorkers = mockWorkers.filter(w =>
+          w.skills.some(skill => entities.skills[0].name.includes(skill.split(' ')[0])) &&
+          w.availability
+        );
+        return language === 'kn'
+          ? `${worker?.name} ಈ ಕೌಶಲ್ಯಕ್ಕೆ ಸೂಕ್ತರಲ್ಲ. ಬದಲಿಗೆ ಪರಿಗಣಿಸಿ: ${alternativeWorkers.slice(0, 3).map(w => w.name).join(', ')}`
+          : `${worker?.name} doesn't have the required skills. Consider: ${alternativeWorkers.slice(0, 3).map(w => w.name).join(', ')}`;
+      }
+    }
+
+    if (entities.skills.length > 0) {
+      const skilledWorkers = mockWorkers.filter(w =>
+        w.skills.some(skill => entities.skills[0].name.includes(skill.split(' ')[0])) &&
+        w.availability
+      );
+      return language === 'kn'
+        ? `${entities.skills[0].name} ಕೌಶಲ್ಯ ಹೊಂದಿರುವ ${skilledWorkers.length} ಕೆಲಸಗಾರರು: ${skilledWorkers.slice(0, 5).map(w => w.name).join(', ')}${skilledWorkers.length > 5 ? ' ಮತ್ತು ಇನ್ನೂ ಇತರರು' : ''}`
+        : `${skilledWorkers.length} workers skilled in ${entities.skills[0].name}: ${skilledWorkers.slice(0, 5).map(w => w.name).join(', ')}${skilledWorkers.length > 5 ? ' and others' : ''}`;
+    }
+
+    return language === 'kn'
+      ? 'ಕೆಲಸಕ್ಕೆ ಸೂಕ್ತವಾದ ಕೆಲಸಗಾರರನ್ನು ಹುಡುಕಲು ದಯವಿಟ್ಟು ಕೌಶಲ್ಯ ಅಥವಾ ಕೆಲಸಗಾರರ ಹೆಸರನ್ನು ನಿರ್ದಿಷ್ಟಪಡಿಸಿ.'
+      : 'Please specify a skill or worker name to find the best assignment.';
+  };
+
+  const handlePerformanceAnalysis = (entities: any, context: any, sentiment: string) => {
+    const { language } = conversationContext.preferences;
+
+    if (entities.workers.length > 0) {
+      const worker = mockWorkers.find(w => w.name === entities.workers[0].name);
+      const workerFeedback = mockFeedback.filter(f => f.workerId === worker?.id);
+
+      return language === 'kn'
+        ? `${worker?.name} ನ ಕಾರ್ಯಕ್ಷಮತೆ: ${worker?.rating}★ ರೇಟಿಂಗ್, ${worker?.skills.length} ಕೌಶಲ್ಯಗಳು, ${worker?.group} ನಲ್ಲಿ ಕೆಲಸ. ${workerFeedback.length} ಪ್ರತಿಕ್ರಿಯೆಗಳು ಲಭ್ಯವಿವೆ.`
+        : `${worker?.name}'s performance: ${worker?.rating}★ rating, ${worker?.skills.length} skills, working in ${worker?.group}. ${workerFeedback.length} feedback entries available.`;
+    }
+
+    if (entities.groups.length > 0) {
+      const groupWorkers = mockWorkers.filter(w => w.group === entities.groups[0].name);
+      const avgRating = groupWorkers.reduce((sum, w) => sum + w.rating, 0) / groupWorkers.length;
+      const topPerformer = groupWorkers.reduce((top, w) => w.rating > top.rating ? w : top);
+
+      return language === 'kn'
+        ? `${entities.groups[0].name} ಗ್ರೂಪ್ ಕಾರ್ಯಕ್ಷಮತೆ: ${avgRating.toFixed(1)}★ ಸರಾಸರಿ ರೇಟಿಂಗ್. ಅತ್ಯುತ್ತಮ ಕಾರ್ಯಕ್ಷಮತೆ: ${topPerformer.name} (${topPerformer.rating}★). ${groupWorkers.length} ಕೆಲಸಗಾರರು.`
+        : `${entities.groups[0].name} group performance: ${avgRating.toFixed(1)}★ average rating. Top performer: ${topPerformer.name} (${topPerformer

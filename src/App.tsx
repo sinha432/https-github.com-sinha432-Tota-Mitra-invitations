@@ -5,6 +5,7 @@ import SupervisorDashboard from '@/pages/SupervisorDashboard'
 import EmployerDashboard from '@/pages/EmployerDashboard'
 import WorkerDashboard from '@/pages/WorkerDashboard'
 import { toast } from 'sonner'
+import { mockEmployerFeedback, EmployerFeedback } from '@/data/mockData'
 
 // Authentication Context
 interface AuthContextType {
@@ -13,6 +14,8 @@ interface AuthContextType {
   logout: () => void
   language: 'en' | 'kn'
   setLanguage: (lang: 'en' | 'kn') => void
+  employerFeedback: EmployerFeedback[]
+  addEmployerFeedback: (feedback: Omit<EmployerFeedback, 'id' | 'createdAt'>) => void
 }
 
 export type UserRole = 'supervisor' | 'employer' | 'worker'
@@ -36,9 +39,10 @@ export const useAuth = () => {
 
 function App() {
   console.log('🚀 App component rendering...')
-  
+
   const [user, setUser] = useState<User | null>(null)
   const [language, setLanguage] = useState<'en' | 'kn'>('en')
+  const [employerFeedback, setEmployerFeedback] = useState<EmployerFeedback[]>(mockEmployerFeedback)
 
   useEffect(() => {
     // Check for saved user session
@@ -103,12 +107,24 @@ function App() {
     localStorage.setItem('totamitra_language', lang)
   }
 
+  const addEmployerFeedback = (feedback: Omit<EmployerFeedback, 'id' | 'createdAt'>) => {
+    const newFeedback: EmployerFeedback = {
+      ...feedback,
+      id: (employerFeedback.length + 1).toString(),
+      createdAt: new Date().toISOString()
+    }
+    setEmployerFeedback(prev => [newFeedback, ...prev])
+    toast.success(language === 'en' ? 'Feedback submitted successfully!' : 'ಪ್ರತಿಕ್ರಿಯೆ ಯಶಸ್ವಿಯಾಗಿ ಸಲ್ಲಿಸಲಾಗಿದೆ!')
+  }
+
   const authValue: AuthContextType = {
     user,
     login,
     logout,
     language,
     setLanguage: updateLanguage,
+    employerFeedback,
+    addEmployerFeedback,
   }
 
   return (
