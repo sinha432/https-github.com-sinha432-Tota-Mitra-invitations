@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useVoiceCommands } from '@/hooks/useVoiceCommands'
 
 // Extend Window type for sharedFeedback and liveAttendance
 declare global {
@@ -44,6 +45,7 @@ import ThreeDIcon from '../components/ThreeDIcon';
 import '../components/WorkerProfile3D.css';
 import { toast } from 'sonner'
 import Notification3D from '../components/Notification3D';
+import { mockWorkers, mockTasks, mockFeedback } from '@/data/mockData'
 
 const baseURL = 'http://localhost:8000/api'
 
@@ -78,11 +80,17 @@ const WorkerDashboard = () => {
   const [attendanceSubmitted, setAttendanceSubmitted] = useState(false);
   // Voice and Farmer Mode state
   const [farmerMode, setFarmerMode] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState('');
   const [voiceEnabled, setVoiceEnabled] = useState(false);
-  const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
+
+  // Voice commands integration
+  const {
+    transcript,
+    isListening,
+    startListening,
+    stopListening,
+    executeCommand
+  } = useVoiceCommands();
 
   // Import AI Assistant
   // Theme toggle
@@ -118,7 +126,6 @@ const WorkerDashboard = () => {
     duration: '',
     description: ''
   })
-  const [isListeningForTask, setIsListeningForTask] = useState(false)
   const [selectedWorkerId, setSelectedWorkerId] = useState('1')
   const [animateProfile, setAnimateProfile] = useState(false)
   const [activeTab, setActiveTab] = useState<'tasks' | 'profile'>('tasks')
@@ -131,28 +138,23 @@ const WorkerDashboard = () => {
     'General Farm Labor'
   ]
 
-  const currentWorker = workers.find(w => w.id === selectedWorkerId) || workers[0]
+const currentWorker = workers.find(w => w.id === selectedWorkerId) || workers[0] || { id: '', name: 'Loading...', profilePic: '', age: '', gender: '', group: '', location: '', rating: 0, availability: false, contact: { phone: '', email: '' }, languages: [], skills: [] }
   const upcomingTasks = tasks.filter(task => task.assignedWorkers.includes(currentWorker?.id || '') && (task.status === 'approved' || task.status === 'pending'))
   const completedTasksCount = tasks.filter(task => task.assignedWorkers.includes(currentWorker?.id || '') && task.status === 'completed').length
 
-  // Fetch data from API
+  // Load mock data
   const fetchData = async () => {
     try {
-      const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
-      console.log('GET /api/workers', { method: 'GET', path: '/api/workers' })
-      const workersRes = await fetch(`${baseURL}/workers`, { headers })
-      console.log('GET /api/tasks', { method: 'GET', path: '/api/tasks' })
-      const tasksRes = await fetch(`${baseURL}/tasks?workerId=${user.id}`, { headers })
-      console.log('GET /api/feedback', { method: 'GET', path: '/api/feedback' })
-      const feedbackRes = await fetch(`${baseURL}/feedback?workerId=${user.id}`, { headers })
-      if (!workersRes.ok || !tasksRes.ok || !feedbackRes.ok) throw new Error('Failed to fetch data')
-      const workersData = await workersRes.json()
-      const tasksData = await tasksRes.json()
-      const feedbackData = await feedbackRes.json()
-      setWorkers(workersData)
-      setTasks(tasksData)
-      setFeedback(feedbackData)
-      setSelectedWorkerId(user.id || workersData[0]?.id)
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500))
+      setWorkers(mockWorkers)
+      setTasks(mockTasks)
+      setFeedback(mockFeedback)
+      if (user.id) {
+        setSelectedWorkerId(user.id)
+      } else if (mockWorkers[0]?.id) {
+        setSelectedWorkerId(mockWorkers[0].id)
+      }
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -161,14 +163,9 @@ const WorkerDashboard = () => {
   }
 
   const handleAttendance = async (status: 'present' | 'absent') => {
-    console.log('POST /api/attendance', { method: 'POST', path: '/api/attendance' })
+    // Simulate API call
     try {
-      const res = await fetch(`${baseURL}/attendance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ workerId: currentWorker?.id, status })
-      })
-      if (!res.ok) throw new Error('Failed to submit attendance')
+      await new Promise(resolve => setTimeout(resolve, 200))
       setAttendance(status);
       setAttendanceSubmitted(true);
       toast.success(status === 'present' ? (language === 'en' ? 'Attendance marked: Present' : 'ಹಾಜರಿದ್ದೇನೆ ಎಂದು ಗುರುತಿಸಲಾಗಿದೆ') : (language === 'en' ? 'Attendance marked: Absent' : 'ಗೈರಾಗಿದ್ದೇನೆ ಎಂದು ಗುರುತಿಸಲಾಗಿದೆ'));
@@ -214,9 +211,11 @@ const WorkerDashboard = () => {
     const typeValue = allowedTypes.includes(newTask.type as typeof allowedTypes[number])
       ? (newTask.type as typeof allowedTypes[number])
       : 'General Farm Labor'
-    console.log('POST /api/tasks', { method: 'POST', path: '/api/tasks' })
     try {
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500))
       const taskData = {
+        id: `task-${Date.now()}`,
         title: newTask.title,
         type: typeValue,
         date: newTask.date,
@@ -229,14 +228,7 @@ const WorkerDashboard = () => {
         createdBy: currentWorker?.name,
         createdAt: new Date().toISOString()
       }
-      const res = await fetch(`${baseURL}/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(taskData)
-      })
-      if (!res.ok) throw new Error('Failed to request task')
-      const newTaskData = await res.json()
-      setTasks([...tasks, newTaskData])
+      setTasks([...tasks, taskData])
       setNotification({ message: language === 'en' ? 'Task request submitted!' : 'ಕಾರ್ಯ ವಿನಂತಿಯನ್ನು ಸಲ್ಲಿಸಲಾಗಿದೆ!', color: '#00e6d3' });
       setTimeout(() => setNotification(null), 2000);
       toast.success(language === 'en' ? 'Task request submitted!' : 'ಕಾರ್ಯ ವಿನಂತಿಯನ್ನು ಸಲ್ಲಿಸಲಾಗಿದೆ!')
@@ -255,9 +247,11 @@ const WorkerDashboard = () => {
   }
 
   const handleFeedbackSubmit = async (feedbackData: { rating: number; comment: string }) => {
-    console.log('POST /api/feedback', { method: 'POST', path: '/api/feedback' })
     try {
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500))
       const feedbackPayload = {
+        id: `feedback-${Date.now()}`,
         taskId: selectedTask?.id || '',
         workerId: currentWorker?.id || '',
         workerName: currentWorker?.name || '',
@@ -265,14 +259,7 @@ const WorkerDashboard = () => {
         comment: feedbackData.comment,
         createdAt: new Date().toISOString()
       }
-      const res = await fetch(`${baseURL}/feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(feedbackPayload)
-      })
-      if (!res.ok) throw new Error('Failed to submit feedback')
-      const savedFeedback = await res.json()
-      setFeedback([...feedback, savedFeedback])
+      setFeedback([...feedback, feedbackPayload])
       setShowFeedbackForm(false)
       setSelectedTask(null)
       toast.success(t.feedbackSubmitted)
@@ -316,282 +303,28 @@ const WorkerDashboard = () => {
     }
   };
 
-  // Function to process voice commands with natural language support
-  const processVoiceCommand = (command: string) => {
-    const lowerCommand = command.toLowerCase().trim();
-    let handled = false;
-
-    // Tab navigation
-    if (!handled && (lowerCommand.includes('tasks') || lowerCommand.includes('my tasks') || lowerCommand.includes('go to tasks') || lowerCommand.includes('open tasks') || lowerCommand.includes('ಕಾರ್ಯಗಳು') || lowerCommand.includes('ನನ್ನ ಕಾರ್ಯಗಳು'))) {
-      handleTabChange('tasks');
-      handled = true;
-    } else if (!handled && (lowerCommand.includes('profile') || lowerCommand.includes('my profile') || lowerCommand.includes('go to profile') || lowerCommand.includes('open profile') || lowerCommand.includes('ಪ್ರೊಫೈಲ್') || lowerCommand.includes('ನನ್ನ ಪ್ರೊಫೈಲ್'))) {
-      handleTabChange('profile');
-      handled = true;
-    }
-
-    // Profile switch
-    if (!handled && (lowerCommand.includes('switch worker') || lowerCommand.includes('change worker') || lowerCommand.includes('select worker') || lowerCommand.includes('ಬದಲಾಯಿಸಿ ಕೆಲಸಗಾರ'))) {
-      const nameMatch = lowerCommand.match(/switch to (\w+)|change to (\w+)|select (\w+)/i) || lowerCommand.match(/(\w+)\s*(?:ಗೆ|to)/);
-      const name = nameMatch ? (nameMatch[1] || nameMatch[2] || nameMatch[3] || '') : '';
-      if (name) {
-        switchWorkerByName(name);
-      } else {
-        speak(language === 'en' ? 'Please say the worker name, like "switch to John".' : 'ಕೆಲಸಗಾರರ ಹೆಸರನ್ನು ಹೇಳಿ, ಉದಾ. "ಜಾನ್‌ಗೆ ಬದಲಾಯಿಸಿ".');
+  // Process voice command using the hook
+  useEffect(() => {
+    if (transcript && !isListening && transcript.trim()) {
+      const result = executeCommand(transcript);
+      if (result) {
+        speak(result.message);
+        // Handle specific actions based on result if needed
+        if (result.action === 'switch_tab') {
+          handleTabChange(result.data as 'tasks' | 'profile');
+        } else if (result.action === 'mark_attendance') {
+          handleAttendance(result.data as 'present' | 'absent');
+        } else if (result.action === 'request_task') {
+          setShowRequestTask(true);
+        } // Add more handlers as needed
       }
-      handled = true;
     }
-
-    // Logout
-    if (!handled && (lowerCommand.includes('logout') || lowerCommand.includes('log out') || lowerCommand.includes('sign out') || lowerCommand.includes('ಲಾಗ್ ಔಟ್') || lowerCommand.includes('ಸೈನ್ ಔಟ್'))) {
-      logout();
-      speak(language === 'en' ? 'Logging out. Goodbye!' : 'ಲಾಗ್ ಔಟ್ ಆಗುತ್ತಿದ್ದೇನೆ. ವಿದಾಯ!');
-      handled = true;
-    }
-
-    // Farmer mode toggle
-    if (!handled && (lowerCommand.includes('farmer mode') || lowerCommand.includes('simple mode') || lowerCommand.includes('enable farmer') || lowerCommand.includes('ಕೃಷಿ ಮೋಡ್') || lowerCommand.includes('ಸರಳ ಮೋಡ್'))) {
-      setFarmerMode(!farmerMode);
-      const mode = !farmerMode ? 'farmer' : 'normal';
-      speak(language === 'en' ? `Switched to ${mode} mode.` : `${mode} ಮೋಡ್‌ಗೆ ಬದಲಾಯಿಸಲಾಗಿದೆ.`);
-      handled = true;
-    }
-
-    // Language switch
-    if (!handled && (lowerCommand.includes('english') || lowerCommand.includes('kannada') || lowerCommand.includes('switch language') || lowerCommand.includes('ಇಂಗ್ಲಿಷ್') || lowerCommand.includes('ಕನ್ನಡ'))) {
-      const newLang = language === 'en' ? 'kn' : 'en';
-      setLanguage(newLang);
-      speak(newLang === 'en' ? 'Switched to English.' : 'ಕನ್ನಡಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ.');
-      handled = true;
-    }
-
-    // View task details
-    if (!handled && (lowerCommand.includes('view details') || lowerCommand.includes('task details') || lowerCommand.includes('show details') || lowerCommand.includes('ವಿವರಗಳು') || lowerCommand.includes('ಕಾರ್ಯ ವಿವರ'))) {
-      const titleMatch = lowerCommand.match(/details for (\w+)|(\w+) details/i);
-      const title = titleMatch ? (titleMatch[1] || titleMatch[2] || '') : '';
-      if (title) {
-        viewTaskDetails(title);
-      } else {
-        speak(language === 'en' ? 'Please say the task title, like "view details for harvesting".' : 'ಕಾರ್ಯದ ಶೀರ್ಷಿಕೆ ಹೇಳಿ, ಉದಾ. "ಕೊಯ್ಯುವಿಕೆ ವಿವರಗಳು ವೀಕ್ಷಿಸಿ".');
-      }
-      handled = true;
-    }
-
-    // Theme toggle with natural phrases
-    if (lowerCommand.includes('dark mode') || lowerCommand.includes('light mode') || lowerCommand.includes('turn on dark') || lowerCommand.includes('turn off dark') || lowerCommand.includes('ಡಾರ್ಕ್ ಮೋಡ್') || lowerCommand.includes('ಲೈಟ್ ಮೋಡ್')) {
-      toggleTheme();
-      const newTheme = theme === 'dark' ? 'light' : 'dark';
-      speak(language === 'en' ? `Switched to ${newTheme} mode. Enjoy the view!` : `${newTheme} ಮೋಡ್‌ಗೆ ಬದಲಾಯಿಸಲಾಗಿದೆ. ವೀಕ್ಷಣೆಯನ್ನು ಆನಂದಿಸಿ!`);
-      handled = true;
-    }
-
-    // Attendance with more natural phrases
-    if (!handled && (lowerCommand.includes('present') || lowerCommand.includes('here') || lowerCommand.includes('i am present') || lowerCommand.includes('i\'m here') || lowerCommand.includes('mark present') || lowerCommand.includes('ಹಾಜರಿದ್ದೇನೆ') || lowerCommand.includes('ನಾನು ಇಲ್ಲಿದ್ದೇನೆ') || lowerCommand.includes('ಹಾಜರ್ ಮಾಡಿ'))) {
-      handleAttendance('present');
-      speak(language === 'en' ? 'Great! Your attendance has been marked as present. Have a productive day!' : 'ಚೆನ್ನಾಗಿ! ನಿಮ್ಮ ಹಾಜರನ್ನು ಹಾಜರಿದ್ದೇನೆ ಎಂದು ಗುರುತಿಸಲಾಗಿದೆ. ಉತ್ಪಾದಕ ದಿನವನ್ನು ಹೊಂದಿ!');
-      handled = true;
-    } else if (!handled && (lowerCommand.includes('absent') || lowerCommand.includes('not here') || lowerCommand.includes('i am absent') || lowerCommand.includes('i\'m not here') || lowerCommand.includes('mark absent') || lowerCommand.includes('ಗೈರಾಗಿದ್ದೇನೆ') || lowerCommand.includes('ನಾನು ಇಲ್ಲಿಲ್ಲ') || lowerCommand.includes('ಗೈರು ಮಾಡಿ'))) {
-      handleAttendance('absent');
-      speak(language === 'en' ? 'Attendance marked as absent. Feel free to update later if needed.' : 'ಹಾಜರನ್ನು ಗೈರಾಗಿದ್ದೇನೆ ಎಂದು ಗುರುತಿಸಲಾಗಿದೆ. ಅಗತ್ಯವಿದ್ದರೆ ನಂತರ ನವೀಕರಿಸಿ.');
-      handled = true;
-    }
-
-    // Task request with natural phrases
-    if (!handled && (lowerCommand.includes('task') || lowerCommand.includes('new task') || lowerCommand.includes('request task') || lowerCommand.includes('i need a task') || lowerCommand.includes('assign task') || lowerCommand.includes('ಕಾರ್ಯ') || lowerCommand.includes('ಹೊಸ ಕಾರ್ಯ') || lowerCommand.includes('ಕಾರ್ಯ ವಿನಂತಿ') || lowerCommand.includes('ಕಾರ್ಯ ನಿಯೋಜಿಸಿ'))) {
-      setShowRequestTask(true);
-      speak(language === 'en' ? "Sure, let's create a new task request. First, tell me the task title and type. For example, 'Coconut harvesting tomorrow at the farm'." : 'ಖಂಡಿತ, ಹೊಸ ಕಾರ್ಯ ವಿನಂತಿ ರಚಿಸೋಣ. ಮೊದಲು ಕಾರ್ಯದ ಶೀರ್ಷಿಕೆ ಮತ್ತು ಪ್ರಕಾರ ಹೇಳಿ. ಉದಾಹರಣೆಗೆ, "ನಾಳೆ ಜಮೀನಿನಲ್ಲಿ ತೆಂಗಿನ ಕೊಯ್ಯುವಿಕೆ".');
-      handled = true;
-    }
-
-    // Submit task with natural phrases
-    if (!handled && showRequestTask && (lowerCommand.includes('submit') || lowerCommand.includes('send') || lowerCommand.includes('done') || lowerCommand.includes('confirm') || lowerCommand.includes('ಸಲ್ಲಿಸಿ') || lowerCommand.includes('ಕಳುಹಿಸಿ') || lowerCommand.includes('ಒಪ್ಪುಕೊಳ್ಳಿ'))) {
-      handleRequestTask();
-      speak(language === 'en' ? "Task request submitted successfully! You'll hear back soon. What else can I help with?" : 'ಕಾರ್ಯ ವಿನಂತಿಯನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಸಲ್ಲಿಸಲಾಗಿದೆ! ಶೀಘ್ರದಲ್ಲೇ ಪ್ರತಿಕ್ರಿಯೆ ಬರುತ್ತದೆ. ಇನ್ನೇನಾದರೂ ಸಹಾಯ ಮಾಡಲಿ?');
-      handled = true;
-    }
-
-    // Feedback with natural phrases
-    if (!handled && (lowerCommand.includes('feedback') || lowerCommand.includes('review') || lowerCommand.includes('rate') || lowerCommand.includes('give feedback') || lowerCommand.includes('ಪ್ರತಿಕ್ರಿಯೆ') || lowerCommand.includes('ಮೌಲ್ಯಮಾಪನ') || lowerCommand.includes('ರೇಟ್ ಮಾಡಿ'))) {
-      if (selectedTask) {
-        setShowFeedbackForm(true);
-        speak(language === 'en' ? `Opening feedback for "${selectedTask.title}". Please rate from 1 to 5 and share your thoughts.` : `"${selectedTask.title}" ಕ್ಕೆ ಪ್ರತಿಕ್ರಿಯೆ ತೆರೆಯುತ್ತಿದೆ. 1 ರಿಂದ 5 ರವರೆಗೆ ಮೌಲ್ಯಮಾಪನ ಮಾಡಿ ಮತ್ತು ನಿಮ್ಮ ಆಲೋಚನೆಗಳನ್ನು ಹಂಚಿಕೊಳ್ಳಿ.`);
-      } else {
-        speak(language === 'en' ? 'Please select a task first, then say "feedback" to provide your review.' : 'ಮೊದಲು ಒಂದು ಕಾರ್ಯವನ್ನು ಆಯ್ಕೆಮಾಡಿ, ನಂತರ "ಪ್ರತಿಕ್ರಿಯೆ" ಎಂದು ಹೇಳಿ ನಿಮ್ಮ ಮೌಲ್ಯಮಾಪನ ನೀಡಿ.');
-      }
-      handled = true;
-    }
-
-    // Submit feedback via voice
-    if (!handled && (lowerCommand.includes('submit feedback') || lowerCommand.includes('send feedback') || lowerCommand.includes('ಪ್ರತಿಕ್ರಿಯೆ ಸಲ್ಲಿಸಿ'))) {
-      if (selectedTask) {
-        const ratingMatch = lowerCommand.match(/(\d)/);
-        const rating = ratingMatch ? parseInt(ratingMatch[1]) : 5;
-        const comment = lowerCommand.replace(/submit feedback \d/, '').trim() || 'Good job!';
-        handleFeedbackSubmit({ rating, comment });
-        speak(language === 'en' ? `Feedback submitted: ${rating} stars, "${comment}".` : `ಪ್ರತಿಕ್ರಿಯೆ ಸಲ್ಲಿಸಲಾಗಿದೆ: ${rating} ನಕ್ಷತ್ರಗಳು, "${comment}".`);
-      } else {
-        speak(language === 'en' ? 'Please select a task first.' : 'ಮೊದಲು ಒಂದು ಕಾರ್ಯವನ್ನು ಆಯ್ಕೆಮಾಡಿ.');
-      }
-      handled = true;
-    }
-
-    // Change role
-    if (!handled && (lowerCommand.includes('change role') || lowerCommand.includes('switch role') || lowerCommand.includes('ಪಾತ್ರ ಬದಲಾಯಿಸಿ'))) {
-      const roleMatch = lowerCommand.match(/(supervisor|employer|worker)/i);
-      if (roleMatch) {
-        const newRole = roleMatch[1].toLowerCase() as 'supervisor' | 'employer' | 'worker';
-        const savedUser = localStorage.getItem('totamitra_user');
-        if (savedUser) {
-          const user = JSON.parse(savedUser);
-          user.role = newRole;
-          localStorage.setItem('totamitra_user', JSON.stringify(user));
-          speak(language === 'en' ? `Switching to ${newRole} role. Reloading...` : `${newRole} ಪಾತ್ರಕ್ಕೆ ಬದಲಾಯಿಸುತ್ತಿದೆ. ಮರುಲೋಡ್ ಆಗುತ್ತಿದೆ...`);
-          setTimeout(() => window.location.reload(), 1000);
-        }
-      } else {
-        speak(language === 'en' ? 'Please specify supervisor, employer, or worker.' : 'ಸೂಪರ್ವೈಸರ್, ಎಂಪ್ಲಾಯರ್ ಅಥವಾ ವರ್ಕರ್ ಎಂದು ನಿರ್ದಿಷ್ಟಪಡಿಸಿ.');
-      }
-      handled = true;
-    }
-
-    // View personal information
-    if (!handled && (lowerCommand.includes('personal info') || lowerCommand.includes('my profile') || lowerCommand.includes('tell me about myself') || lowerCommand.includes('ನನ್ನ ಮಾಹಿತಿ') || lowerCommand.includes('ನನ್ನ ಪ್ರೊಫೈಲ್'))) {
-      setActiveTab('profile');
-      const info = `${currentWorker?.name}, age ${currentWorker?.age}, ${currentWorker?.gender}, group ${currentWorker?.group}, location ${currentWorker?.location}, rating ${currentWorker?.rating}, skills: ${currentWorker?.skills?.join(', ')}.`;
-      speak(language === 'en' ? `Switching to profile. ${info}` : `ಪ್ರೊಫೈಲ್‌ಗೆ ಬದಲಾಯಿಸುತ್ತಿದೆ. ${info}`);
-      handled = true;
-    }
-
-    // Weather with more phrases
-    if (!handled && (lowerCommand.includes('weather') || lowerCommand.includes('forecast') || lowerCommand.includes('today weather') || lowerCommand.includes('weather details') || lowerCommand.includes('tell me weather') || lowerCommand.includes('what\'s the weather') || lowerCommand.includes('rain check') || lowerCommand.includes('ಹವಾಮಾನ') || lowerCommand.includes('ಇಂದಿನ ಹವಾಮಾನ') || lowerCommand.includes('ಹವಾಮಾನ ವಿವರಗಳು') || lowerCommand.includes('ಹವಾಮಾನ ಹೇಳಿ'))) {
-      // Mock detailed weather data (integrate with WeatherWidget in real app)
-      const weatherDetails = {
-        condition: 'Sunny',
-        temp: 28,
-        humidity: 60,
-        wind: '5 km/h',
-        uv: 'High'
-      };
-      speak(language === 'en' ? `Today's weather is ${weatherDetails.condition} with a temperature of ${weatherDetails.temp} degrees Celsius. Humidity is ${weatherDetails.humidity}%, wind at ${weatherDetails.wind}, and UV index is ${weatherDetails.uv}. Perfect for outdoor work!` : `ಇಂದಿನ ಹವಾಮಾನ ${weatherDetails.condition} ಆಗಿದ್ದು, ತಾಪಮಾನ ${weatherDetails.temp} ಡಿಗ್ರಿ ಸೆಲ್ಸಿಯಸ್. ಆರ್ದ್ರತೆ ${weatherDetails.humidity}%, ಗಾಳಿ ${weatherDetails.wind}, ಮತ್ತು UV ಸೂಚ್ಯಂಕ ${weatherDetails.uv}. ಹೊರಗಿನ ಕೆಲಸಕ್ಕೆ ಸೂಕ್ತ!`);
-      // Trigger weather widget update if needed
-      handled = true;
-    }
-
-    // AI Assistant commands
-    if (!handled && (lowerCommand.includes('assistant') || lowerCommand.includes('totamitra') || lowerCommand.includes('ai') || lowerCommand.includes('open assistant') || lowerCommand.includes('help me') || lowerCommand.includes('ಸಹಾಯಕ') || lowerCommand.includes('ಟೋಟಮಿತ್ರ ಸಹಾಯಕ') || lowerCommand.includes('ಸಹಾಯ'))) {
-      // Since AIAssistant is always rendered, focus or highlight it (simulate by speaking and toasting)
-      toast.info(language === 'en' ? 'Totamitra Assistant is ready! You can chat with it on the side.' : 'ಟೋಟಮಿತ್ರ ಸಹಾಯಕ ಸಿದ್ಧ! ಪಕ್ಕದಲ್ಲಿ ಅದರೊಂದಿಗೆ ಚಾಟ್ ಮಾಡಬಹುದು.');
-      speak(language === 'en' ? "Opening Totamitra Assistant. Ask it anything about your dashboard or tasks!" : 'ಟೋಟಮಿತ್ರ ಸಹಾಯಕವನ್ನು ತೆರೆಯುತ್ತಿದ್ದೇನೆ. ನಿಮ್ಮ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್ ಅಥವಾ ಕಾರ್ಯಗಳ ಬಗ್ಗೆ ಏನು ಕೇಳಬಹುದು!');
-      // In real app, could trigger a ref to focus the assistant component
-      handled = true;
-    }
-
-    // Help or unknown command with expanded guidance
-    if (!handled) {
-      speak(language === 'en' ? `I didn't catch that. Try saying "go to tasks", "switch to profile", "mark present", "request new task", "view details for harvesting", "switch language", "enable farmer mode", "logout", or "weather". What would you like to do?` : `ಅದನ್ನು ಅರ್ಥಮಾಡಿಕೊಳ್ಳಲಿಲ್ಲ. "ಕಾರ್ಯಗಳು ಹೋಗಿ", "ಪ್ರೊಫೈಲ್ ಬದಲಾಯಿಸಿ", "ಹಾಜರ್ ಮಾಡಿ", "ಹೊಸ ಕಾರ್ಯ ವಿನಂತಿಸಿ", "ಕೊಯ್ಯುವಿಕೆ ವಿವರಗಳು ವೀಕ್ಷಿಸಿ", "ಭಾಷೆ ಬದಲಾಯಿಸಿ", "ಕೃಷಿ ಮೋಡ್ ಆನ್ ಮಾಡಿ", "ಲಾಗ್ ಔಟ್", ಅಥವಾ "ಹವಾಮಾನ" ಎಂದು ಹೇಳಿ ಪ್ರಯತ್ನಿಸಿ. ನೀವು ಏನು ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?`);
-    }
-  };
+  }, [transcript, isListening, executeCommand, language, handleTabChange, handleAttendance, speak]);
 
 
 
-  // Function to start listening
-  const startListening = () => {
-    if (recognitionRef.current && voiceEnabled && !isListening) {
-      setIsListening(true);
-      recognitionRef.current.start();
-    } else if (!voiceEnabled) {
-      toast.error(language === 'en' ? 'Voice recognition not supported in this browser' : 'ಈ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ಬೆಂಬಲಿತವಾಗಿಲ್ಲ');
-    } else {
-      toast.info(language === 'en' ? 'Listening already in progress' : 'ಶ್ರವಣ ನಡೆಯುತ್ತಿದೆ');
-    }
-  };
 
-  // Function to start listening for task request
-  const startListeningForTask = () => {
-    if (recognitionRef.current && voiceEnabled && !isListeningForTask) {
-      setIsListeningForTask(true);
-      recognitionRef.current.start();
-    } else if (!voiceEnabled) {
-      toast.error(language === 'en' ? 'Voice recognition not supported' : 'ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ಬೆಂಬಲಿತವಾಗಿಲ್ಲ');
-    } else {
-      toast.info(language === 'en' ? 'Listening for task details' : 'ಕಾರ್ಯ ವಿವರಗಳಿಗಾಗಿ ಶ್ರವಣಿಸುತ್ತಿದೆ');
-    }
-  };
 
-  // Function to parse task voice input with improved natural language
-  const parseTaskVoiceInput = (input: string) => {
-    const lowerInput = input.toLowerCase().trim();
-    let parsedTask = { ...newTask };
-
-    // Enhanced keyword matching for task type with natural phrases
-    if (lowerInput.includes('coconut') || lowerInput.includes('ತೆಂಗು') || lowerInput.includes('coconut harvesting')) {
-      parsedTask.type = 'Coconut Harvesting';
-    } else if (lowerInput.includes('areca') || lowerInput.includes('arecanut') || lowerInput.includes('ಅಡಿಕೆ') || lowerInput.includes('betel nut')) {
-      parsedTask.type = 'Arecanut Harvesting';
-    } else if (lowerInput.includes('banana') || lowerInput.includes('ಬಾಳೆ') || lowerInput.includes('banana cultivation')) {
-      parsedTask.type = 'Banana Cultivation Assistance';
-    } else if (lowerInput.includes('spray') || lowerInput.includes('medicine') || lowerInput.includes('ಸ್ಪ್ರೇ') || lowerInput.includes('arecanut spray')) {
-      parsedTask.type = 'Arecanut Medicine Spray';
-    } else if (lowerInput.includes('pepper') || lowerInput.includes('vine') || lowerInput.includes('support')) {
-      parsedTask.type = 'Pepper Vine Support Work';
-    } else {
-      parsedTask.type = 'General Farm Labor';
-    }
-
-    // Extract title from descriptive phrases (first meaningful words)
-    const words = lowerInput.replace(/^(i want|please|can you|ನಾನು ಬಯಸು|ದಯವಿಟ್ಟು)/, '').split(' ');
-    parsedTask.title = words.slice(0, 4).join(' ').replace(/\.$/, '') || 'New Task Request';
-
-    // Enhanced date extraction
-    const today = new Date().toISOString().split('T')[0];
-    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); const tomorrowStr = tomorrow.toISOString().split('T')[0];
-    if (lowerInput.includes('tomorrow') || lowerInput.includes('ನಾಳೆ') || lowerInput.includes('next day')) {
-      parsedTask.date = tomorrowStr;
-    } else if (lowerInput.includes('today') || lowerInput.includes('ಇಂದು') || lowerInput.includes('now')) {
-      parsedTask.date = today;
-    } else if (lowerInput.match(/\d{1,2}\/\d{1,2}/)) { // Simple date pattern like "10/15"
-      const dateMatch = lowerInput.match(/(\d{1,2})[\/-](\d{1,2})/);
-      if (dateMatch) {
-        const month = parseInt(dateMatch[1]) - 1;
-        const day = parseInt(dateMatch[2]);
-        const dateObj = new Date(new Date().getFullYear(), month, day);
-        parsedTask.date = dateObj.toISOString().split('T')[0];
-      }
-    } else {
-      parsedTask.date = tomorrowStr; // Default to tomorrow
-    }
-
-    // Enhanced location extraction
-    if (lowerInput.includes('farm') || lowerInput.includes('field') || lowerInput.includes('plantation') || lowerInput.includes('ಜಮೀನು') || lowerInput.includes('ಕ್ಷೇತ್ರ')) {
-      parsedTask.location = lowerInput.includes('main farm') ? 'Main Farm' : 'Farm';
-    } else if (lowerInput.includes('home') || lowerInput.includes('house')) {
-      parsedTask.location = 'Home Location';
-    } else {
-      // Extract location words
-      const locationWords = lowerInput.match(/(farm|field|plantation|orchard|ಜಮೀನು|ಕ್ಷೇತ್ರ|ಮನೆ)/);
-      parsedTask.location = locationWords ? locationWords[0].charAt(0).toUpperCase() + locationWords[0].slice(1) : 'Farm';
-    }
-
-    // Enhanced duration extraction
-    const hourMatch = lowerInput.match(/(\d+)\s*(hours?|hrs?|ಗಂಟೆಗಳ?|ಗಂಟೆ)/i);
-    if (hourMatch) {
-      parsedTask.duration = `${hourMatch[1]} ${parseInt(hourMatch[1]) > 1 ? 'hours' : 'hour'}`;
-    } else if (lowerInput.includes('half day')) {
-      parsedTask.duration = '4 hours';
-    } else if (lowerInput.includes('full day')) {
-      parsedTask.duration = '8 hours';
-    } else {
-      parsedTask.duration = '4 hours'; // Default
-    }
-
-    // Extract description (remaining text)
-    const descStart = lowerInput.indexOf('because') > -1 ? lowerInput.indexOf('because') : lowerInput.length;
-    const originalDescStart = input.toLowerCase().indexOf('because') > -1 ? input.toLowerCase().indexOf('because') : input.length;
-    parsedTask.description = input.substring(originalDescStart).trim() || '';
-
-    setNewTask(parsedTask);
-    speak(language === 'en' ? `I've filled in the details: ${parsedTask.title} for ${parsedTask.date} at ${parsedTask.location}. Review and say "submit" when ready.` : `ವಿವರಗಳನ್ನು ಭರ್ತಿ ಮಾಡಿದ್ದೇನೆ: ${parsedTask.title} ${parsedTask.date} ನ ${parsedTask.location} ರಲ್ಲಿ. ಪರಿಶೀಲಿಸಿ ಮತ್ತು ಸಿದ್ಧವಾದಾಗ "ಸಲ್ಲಿಸಿ" ಎಂದು ಹೇಳಿ.`);
-  };
 
   const translations = {
     en: {
@@ -689,40 +422,13 @@ const WorkerDashboard = () => {
     fetchData()
   }, [])
 
-  // Initialize speech recognition and synthesis
+  // Initialize speech synthesis
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = false;
-        recognitionRef.current.interimResults = false;
-        recognitionRef.current.lang = language === 'kn' ? 'kn-IN' : 'en-US';
-        recognitionRef.current.onresult = (event: any) => {
-          const currentTranscript = event.results[0][0].transcript;
-          setTranscript(currentTranscript);
-          if (isListeningForTask) {
-            parseTaskVoiceInput(currentTranscript);
-            setIsListeningForTask(false);
-          } else {
-            processVoiceCommand(currentTranscript);
-          }
-        };
-        recognitionRef.current.onerror = (event: any) => {
-          console.error('Speech recognition error:', event.error);
-          setIsListening(false);
-          setIsListeningForTask(false);
-          toast.error(language === 'en' ? 'Voice recognition failed' : 'ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ವಿಫಲವಾಗಿದೆ');
-        };
-        recognitionRef.current.onend = () => {
-          setIsListening(false);
-          setIsListeningForTask(false);
-        };
-      }
       synthRef.current = window.speechSynthesis;
-      setVoiceEnabled(!!SpeechRecognition && !!synthRef.current);
+      setVoiceEnabled(!!synthRef.current);
     }
-  }, [language]);
+  }, []);
 
   // Auto-speak on farmer mode toggle or load
   useEffect(() => {
@@ -776,12 +482,12 @@ const WorkerDashboard = () => {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Avatar className="h-12 w-12">
-              <AvatarImage src={currentWorker.profilePic} alt={currentWorker.name} />
-              <AvatarFallback>{currentWorker.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+              <AvatarImage src={currentWorker?.profilePic || ''} alt={currentWorker?.name || 'Worker'} />
+              <AvatarFallback>{currentWorker?.name?.split(' ').map(n => n[0]).join('') || 'W'}</AvatarFallback>
             </Avatar>
             <div>
               <h1 className="text-2xl font-bold text-primary">{t.dashboard}</h1>
-              <p className="text-sm text-muted-foreground">{t.welcome}, {currentWorker.name}</p>
+              <p className="text-sm text-muted-foreground">{t.welcome}, {currentWorker?.name || 'Worker'}</p>
             </div>
           </div>
 
@@ -955,7 +661,7 @@ const WorkerDashboard = () => {
               </Card>
               <Card className="text-center">
                 <CardContent className="pt-6">
-                  <div className="text-3xl font-bold text-purple-600">{currentWorker.rating}</div>
+                  <div className="text-3xl font-bold text-purple-600">{currentWorker?.rating || 0}</div>
                   <p className="text-sm text-muted-foreground">{language === 'en' ? 'Rating' : 'ರೇಟಿಂಗ್'}</p>
                 </CardContent>
               </Card>
@@ -1051,24 +757,11 @@ const WorkerDashboard = () => {
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
                 <Card className="w-full max-w-lg mx-auto">
                   <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle>{language === 'en' ? 'Request New Task' : 'ಹೊಸ ಕಾರ್ಯ ವಿನಂತಿಸಿ'}</CardTitle>
-                        <CardDescription>
-                          {language === 'en' ? 'Submit a request for a new task assignment' : 'ಹೊಸ ಕಾರ್ಯವನ್ನು ವಿನಂತಿಸಲು ವಿವರಗಳನ್ನು ಭರ್ತಿ ಮಾಡಿ'}
-                        </CardDescription>
-                      </div>
-                      {voiceEnabled && (
-                        <Button
-                          variant={isListeningForTask ? "destructive" : "secondary"}
-                          size="sm"
-                          onClick={startListeningForTask}
-                          disabled={isListeningForTask}
-                        >
-                          <Mic className="h-4 w-4 mr-2" />
-                          {isListeningForTask ? (language === 'en' ? 'Listening...' : 'ಶ್ರವಣಿಸುತ್ತಿದೆ...') : (language === 'en' ? 'Voice Input' : 'ಧ್ವನಿ ಇನ್‌ಪುಟ್')}
-                        </Button>
-                      )}
+                    <div>
+                      <CardTitle>{language === 'en' ? 'Request New Task' : 'ಹೊಸ ಕಾರ್ಯ ವಿನಂತಿಸಿ'}</CardTitle>
+                      <CardDescription>
+                        {language === 'en' ? 'Submit a request for a new task assignment' : 'ಹೊಸ ಕಾರ್ಯವನ್ನು ವಿನಂತಿಸಲು ವಿವರಗಳನ್ನು ಭರ್ತಿ ಮಾಡಿ'}
+                      </CardDescription>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -1317,51 +1010,59 @@ const WorkerDashboard = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className={`space-y-4 ${animateProfile ? 'worker-profile-3d-animate' : ''}`}> 
-                  <div className="flex items-center justify-center mb-6">
-                    <Avatar className="h-20 w-20">
-                      <AvatarImage src={currentWorker.profilePic} alt={currentWorker.name} />
-                      <AvatarFallback>{currentWorker.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                    </Avatar>
-                  </div>
+                  {currentWorker.id ? (
+                    <>
+                      <div className="flex items-center justify-center mb-6">
+                        <Avatar className="h-20 w-20">
+                          <AvatarImage src={currentWorker?.profilePic || ''} alt={currentWorker?.name || 'Worker'} />
+                          <AvatarFallback>{currentWorker?.name?.split(' ').map(n => n[0]).join('') || 'W'}</AvatarFallback>
+                        </Avatar>
+                      </div>
 
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">{t.name}:</span>
-                      <span className="font-medium">{currentWorker.name}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">{t.age}:</span>
-                      <span className="font-medium">{currentWorker.age}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">{t.gender}:</span>
-                      <span className="font-medium">{currentWorker.gender}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">{t.group}:</span>
-                      <Badge>{currentWorker.group}</Badge>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">{t.location}:</span>
-                      <span className="font-medium">{currentWorker.location}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">{t.rating}:</span>
-                      <div className="flex items-center gap-1">
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        <span className="font-medium">{currentWorker.rating}</span>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">{t.name}:</span>
+                          <span className="font-medium">{currentWorker?.name || 'Unknown'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">{t.age}:</span>
+                          <span className="font-medium">{currentWorker?.age || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">{t.gender}:</span>
+                          <span className="font-medium">{currentWorker?.gender || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">{t.group}:</span>
+                          <Badge>{currentWorker?.group || 'N/A'}</Badge>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">{t.location}:</span>
+                          <span className="font-medium">{currentWorker?.location || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">{t.rating}:</span>
+                          <div className="flex items-center gap-1">
+                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                            <span className="font-medium">{currentWorker?.rating || 0}</span>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">{t.availability}:</span>
+                          <div className="flex items-center gap-2">
+                            <div className={`availability-dot ${currentWorker?.availability ? 'available' : 'unavailable'}`} />
+                            <span className={`font-medium ${currentWorker?.availability ? 'text-green-600' : 'text-red-600'}`}>
+                              {currentWorker?.availability ? t.available : t.unavailable}
+                            </span>
+                          </div>
+                        </div>
                       </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">Loading profile...</p>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">{t.availability}:</span>
-                      <div className="flex items-center gap-2">
-                        <div className={`availability-dot ${currentWorker.availability ? 'available' : 'unavailable'}`} />
-                        <span className={`font-medium ${currentWorker.availability ? 'text-green-600' : 'text-red-600'}`}>
-                          {currentWorker.availability ? t.available : t.unavailable}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -1378,18 +1079,18 @@ const WorkerDashboard = () => {
                   <CardContent className="space-y-3">
                     <div className="flex items-center gap-3">
                       <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span>{currentWorker.contact.phone}</span>
+                      <span>{currentWorker?.contact?.phone || 'N/A'}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span>{currentWorker.contact.email}</span>
+                      <span>{currentWorker?.contact?.email || 'N/A'}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <Languages className="h-4 w-4 text-muted-foreground" />
                       <div className="flex gap-2">
-                        {currentWorker.languages.map((lang) => (
+                        {currentWorker?.languages?.map((lang) => (
                           <Badge key={lang} variant="secondary">{lang}</Badge>
-                        ))}
+                        )) || <Badge variant="secondary">N/A</Badge>}
                       </div>
                     </div>
                   </CardContent>
@@ -1405,9 +1106,9 @@ const WorkerDashboard = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="flex gap-2 flex-wrap">
-                      {currentWorker.skills.map(skill => (
+                      {currentWorker?.skills?.map(skill => (
                         <Badge key={skill} variant="secondary">{skill}</Badge>
-                      ))}
+                      )) || <Badge variant="secondary">No skills listed</Badge>}
                     </div>
                   </CardContent>
                 </Card>
