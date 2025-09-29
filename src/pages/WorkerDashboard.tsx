@@ -83,15 +83,6 @@ const WorkerDashboard = () => {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const synthRef = useRef<SpeechSynthesis | null>(null);
 
-  // Voice commands integration
-  const {
-    transcript,
-    isListening,
-    startListening,
-    stopListening,
-    executeCommand
-  } = useVoiceCommands();
-
   // Import AI Assistant
   // Theme toggle
   const [theme, setTheme] = useState(document.documentElement.classList.contains('dark') ? 'dark' : 'light');
@@ -103,6 +94,15 @@ const WorkerDashboard = () => {
   const AIAssistant = React.lazy(() => import('../components/EnhancedAIAssistant'));
 
   const { user, logout, language, setLanguage } = useAuth()
+
+  // Voice commands integration
+  const {
+    transcript,
+    isListening,
+    startListening,
+    stopListening,
+    executeCommand
+  } = useVoiceCommands(language);
 
   // API states
   const [workers, setWorkers] = useState<any[]>([])
@@ -474,7 +474,7 @@ const currentWorker = workers.find(w => w.id === selectedWorkerId) || workers[0]
         {typeof window !== 'undefined' && loading ? (
           <div>Loading data...</div>
         ) : (
-          <AIAssistant appData={{ workers, tasks, feedback }} theme={theme} />
+          <AIAssistant appData={{ workers, tasks, feedback }} theme={theme} language={language} />
         )}
       </React.Suspense>
       {/* Header */}

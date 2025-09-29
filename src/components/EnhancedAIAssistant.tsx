@@ -2,29 +2,35 @@ import ThreeDOrb from './ThreeDOrb';
 import React, { useState, useEffect, useRef } from 'react';
 import { FaMicrophone, FaPaperPlane, FaRobot, FaKeyboard, FaTimes } from 'react-icons/fa';
 import '../AIAssistant.css';
-import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
+import { useVoiceCommands } from '@/hooks/useVoiceCommands';
 
 interface AIAssistantProps {
   appData?: any;
   onSend?: (msg: string) => void;
   theme?: string;
+  role?: 'farmer' | 'worker';
+  language?: 'en' | 'kn';
+  onSubmitFeedback?: (workerId: string, feedback: any) => void;
 }
 
-export default function AIAssistant({ appData, onSend, theme }: AIAssistantProps) {
+export default function AIAssistant({ appData, onSend, theme, role = 'farmer', language = 'en', onSubmitFeedback }: AIAssistantProps) {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Array<{ sender: 'user' | 'ai', text: string, timestamp?: Date }>>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [lastQueryContext, setLastQueryContext] = useState<string | null>(null);
   const [chatHistory, setChatHistory] = useState<Array<{ sender: 'user' | 'ai', text: string, timestamp: Date }>>([]);
+  const [currentMode, setCurrentMode] = useState<'normal' | 'worker_profile'>('normal');
+  const [currentWorkerProfile, setCurrentWorkerProfile] = useState<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
     transcript,
-    listening,
-    resetTranscript,
-    browserSupportsSpeechRecognition
-  } = useSpeechRecognition();
+    isListening: listening,
+    startListening,
+    stopListening,
+    executeCommand
+  } = useVoiceCommands(language);
 
   // Auto-scroll to bottom of messages
   const scrollToBottom = () => {
@@ -35,44 +41,12 @@ export default function AIAssistant({ appData, onSend, theme }: AIAssistantProps
     scrollToBottom();
   }, [messages]);
 
-  // Enhanced voice recognition integration
-  const handleMicClick = () => {
-    if (!browserSupportsSpeechRecognition) {
-      setMessages([...messages, {
-        sender: 'ai',
-        text: '❌ Voice recognition is not supported in this browser. Please type your message instead.',
-        timestamp: new Date()
-      }]);
-      return;
-    }
-
+  // Enhanced voice recognition integration with permission feedback
+  const handleMicClick = async () => {
     if (!listening) {
-      try {
-        SpeechRecognition.startListening({
-          continuous: false,
-          language: 'en-IN',
-          interimResults: false
-        });
-      } catch (error) {
-        console.error('Speech recognition error:', error);
-        setMessages([...messages, {
-          sender: 'ai',
-          text: '❌ Voice recognition failed to start. Please check your microphone permissions and try again.',
-          timestamp: new Date()
-        }]);
-      }
+      await startListening();
     } else {
-      try {
-        SpeechRecognition.stopListening();
-        if (transcript.trim()) {
-          setInput(transcript);
-        }
-        resetTranscript();
-      } catch (error) {
-        console.error('Speech recognition stop error:', error);
-        setInput(transcript || '');
-        resetTranscript();
-      }
+      stopListening();
     }
   };
 
@@ -89,78 +63,82 @@ export default function AIAssistant({ appData, onSend, theme }: AIAssistantProps
     setMessages([]);
     setChatHistory([]);
     setLastQueryContext(null);
+    setCurrentMode('normal');
+    setCurrentWorkerProfile(null);
   };
 
-  // Enhanced error handling for voice recognition
+  // Process voice command when listening ends
   useEffect(() => {
-    if (transcript && listening) {
-      // Real-time feedback for voice input
-      setInput(transcript);
+    if (transcript && !listening && transcript.trim()) {
+      const result = executeCommand(transcript);
+      if (result) {
+        const userMessage = { sender: 'user' as const, text: transcript, timestamp: new Date() };
+        const aiMessage = { sender: 'ai' as const, text: result.message, timestamp: new Date() };
+        setMessages(prev => [...prev, userMessage, aiMessage]);
+        setChatHistory(prev => [...prev, userMessage, aiMessage]);
+      }
+      setInput('');
     }
-  }, [transcript, listening]);
-
-  // Add speech recognition event listeners
-  useEffect(() => {
-    const handleSpeechError = (event: any) => {
-      console.error('Speech recognition error:', event.error);
-      let errorMessage = '❌ Voice recognition error occurred.';
-
-      switch (event.error) {
-        case 'not-allowed':
-          errorMessage = '❌ Microphone access denied. Please allow microphone permissions and try again.';
-          break;
-        case 'no-speech':
-          errorMessage = '❌ No speech detected. Please speak clearly and try again.';
-          break;
-        case 'network':
-          errorMessage = '❌ Network error occurred. Please check your connection and try again.';
-          break;
-        case 'service-not-allowed':
-          errorMessage = '❌ Speech recognition service not allowed. Please check your browser settings.';
-          break;
-        default:
-          errorMessage = `❌ Voice recognition failed: ${event.error}. Please try typing your message instead.`;
-      }
-
-      setMessages(prev => [...prev, {
-        sender: 'ai',
-        text: errorMessage,
-        timestamp: new Date()
-      }]);
-
-      // Reset listening state on error
-      if (listening) {
-        SpeechRecognition.stopListening();
-        resetTranscript();
-      }
-    };
-
-    const handleSpeechEnd = () => {
-      if (listening && transcript.trim()) {
-        setInput(transcript);
-      }
-      resetTranscript();
-    };
-
-    // Add event listeners if supported
-    if (browserSupportsSpeechRecognition) {
-      SpeechRecognition.onerror = handleSpeechError;
-      SpeechRecognition.onend = handleSpeechEnd;
-    }
-
-    return () => {
-      // Cleanup
-      if (browserSupportsSpeechRecognition) {
-        SpeechRecognition.onerror = null;
-        SpeechRecognition.onend = null;
-      }
-    };
-  }, [browserSupportsSpeechRecognition, listening, transcript]);
+  }, [transcript, listening, executeCommand]);
 
   // Enhanced query processing with fuzzy matching and context awareness
   const processQuery = (query: string) => {
     const lowerQuery = query.toLowerCase().trim();
     if (!appData) return "❌ Sorry, I couldn't access app data. Please try refreshing the page.";
+
+    // Farmer role specific features
+    if (role === 'farmer') {
+      // Switch to worker profile
+      const workerMatch = lowerQuery.match(/(?:switch to|view|open) (.*?) (?:profile|view)/i);
+      if (workerMatch && appData.workers) {
+        const workerName = workerMatch[1].trim();
+        const worker = appData.workers.find((w: any) => 
+          w.name.toLowerCase().includes(workerName) || workerName.includes(w.name.toLowerCase())
+        );
+        if (worker) {
+          setCurrentMode('worker_profile');
+          setCurrentWorkerProfile(worker);
+          return `✅ Switched to ${worker.name}'s profile. You can now say "submit feedback" or "cancel".`;
+        } else {
+          return `❌ Worker "${workerName}" not found. Please check the name and try again.`;
+        }
+      }
+
+      // Handle worker profile mode
+      if (currentMode === 'worker_profile' && currentWorkerProfile) {
+        if (lowerQuery.includes('submit feedback') || lowerQuery.includes('send feedback')) {
+          // Simulate or collect feedback - for now, default positive feedback
+          const defaultFeedback = {
+            rating: 5,
+            comment: lowerQuery.includes('good') || lowerQuery.includes('excellent') ? 'Great performance!' : 'Standard feedback'
+          };
+          if (onSubmitFeedback) {
+            onSubmitFeedback(currentWorkerProfile.id, defaultFeedback);
+          }
+          setCurrentMode('normal');
+          setCurrentWorkerProfile(null);
+          return `✅ Feedback submitted for ${currentWorkerProfile.name}: ${defaultFeedback.comment} (Rating: ${defaultFeedback.rating}/5)`;
+        }
+
+        if (lowerQuery.includes('cancel') || lowerQuery.includes('cancel feedback')) {
+          setCurrentMode('normal');
+          setCurrentWorkerProfile(null);
+          return `❌ Feedback cancelled for ${currentWorkerProfile.name}. Switched back to normal mode.`;
+        }
+
+        // Show current worker info if in profile mode
+        if (lowerQuery.includes('profile') || lowerQuery.includes('info')) {
+          const worker = currentWorkerProfile;
+          return `👤 **${worker.name} Profile**\n` +
+                 `📍 Location: ${worker.location}\n` +
+                 `👥 Group: ${worker.group}\n` +
+                 `⭐ Rating: ${worker.rating}/5\n` +
+                 `🛠 Skills: ${worker.skills.join(', ')}\n` +
+                 `📞 Available: ${worker.availability ? 'Yes' : 'No'}\n\n` +
+                 `💬 Say "submit feedback" to provide feedback or "cancel" to exit.`;
+        }
+      }
+    }
 
     // Context-aware responses based on previous queries
     if (lastQueryContext) {
@@ -364,7 +342,7 @@ export default function AIAssistant({ appData, onSend, theme }: AIAssistantProps
 
   // Enhanced help response
   const getHelpResponse = () => {
-    return `🤖 **TotaMitra Assistant Help**
+    let helpText = `🤖 **TotaMitra Assistant Help**
 
 **👥 Worker Queries:**
 • "Show available workers" - List workers ready for tasks
@@ -388,9 +366,22 @@ export default function AIAssistant({ appData, onSend, theme }: AIAssistantProps
 
 **🎤 Voice Commands:**
 • Click microphone and speak naturally
-• Press Enter or click send to submit text
+• Press Enter or click send to submit text`;
+
+    if (role === 'farmer') {
+      helpText += `
+
+**🌾 Farmer Features:**
+• "Switch to Ramesh Shenoy profile" - Switch to worker's profile
+• "Submit feedback" - Submit feedback when in worker profile
+• "Cancel" - Cancel and exit worker profile mode`;
+    }
+
+    helpText += `
 
 💬 **Tips:** Ask follow-up questions like "more details" or "show contacts" for additional information!`;
+
+    return helpText;
   };
 
   const handleSend = async () => {
@@ -404,7 +395,6 @@ export default function AIAssistant({ appData, onSend, theme }: AIAssistantProps
 
     // Clear input and transcript
     setInput('');
-    resetTranscript();
 
     // Call parent onSend if provided
     if (onSend) onSend(messageToSend);
@@ -433,8 +423,7 @@ export default function AIAssistant({ appData, onSend, theme }: AIAssistantProps
     if (listening) {
       timeoutId = setTimeout(() => {
         if (listening) {
-          SpeechRecognition.stopListening();
-          resetTranscript();
+          stopListening();
           setMessages(prev => [...prev, {
             sender: 'ai',
             text: '⏱️ Voice input timed out. Please try again or type your message.',
@@ -446,7 +435,7 @@ export default function AIAssistant({ appData, onSend, theme }: AIAssistantProps
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [listening]);
+  }, [listening, stopListening]);
   return (
     <>
       {/* 3D Animated orb button */}
@@ -470,6 +459,13 @@ export default function AIAssistant({ appData, onSend, theme }: AIAssistantProps
               <li>Send a notification to all workers.</li>
               <li>Give feedback for Ramesh Shenoy.</li>
               <li>Switch to Kannada.</li>
+              {role === 'farmer' && (
+                <>
+                  <li>Switch to Ramesh Shenoy profile</li>
+                  <li>Submit feedback</li>
+                  <li>Cancel</li>
+                </>
+              )}
             </ul>
           </div>
           <div className="ai-popover-messages">
@@ -504,7 +500,6 @@ export default function AIAssistant({ appData, onSend, theme }: AIAssistantProps
               onClick={handleMicClick}
               className={listening ? 'ai-popover-mic-btn listening' : 'ai-popover-mic-btn'}
               title={listening ? 'Stop voice input (click or wait for timeout)' : 'Start voice input'}
-              disabled={!browserSupportsSpeechRecognition}
             >
               <FaMicrophone />
               {listening && <span className="ai-mic-indicator">🎤</span>}
@@ -514,7 +509,7 @@ export default function AIAssistant({ appData, onSend, theme }: AIAssistantProps
               value={input || transcript}
               onChange={e => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder={listening ? '🎤 Listening...' : '💬 Type a message or press Enter to send...'}
+              placeholder={listening ? '🎤 Listening...' : language === 'en' ? '💬 Type a message or press Enter to send...' : '💬 ಸಂದೇಶ ಟೈಪ್ ಮಾಡಿ ಅಥವಾ ಎಂಟರ್ ಒತ್ತಿ ಕಳುಹಿಸಿ...'}
               className="ai-popover-input"
               disabled={listening}
             />
